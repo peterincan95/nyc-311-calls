@@ -12,7 +12,7 @@
   --day-tick: #8c8c8c;
   --track-height: 64px;
   --month-column: 96px;
-  font-family: "Avenir Next", Avenir, "Segoe UI", system-ui, sans-serif;
+  font-family: "IBM Plex Sans Condensed", system-ui, sans-serif;
   color: var(--text);
   background: var(--background);
 }
@@ -100,6 +100,7 @@ body,
 
 .sentence {
   display: flex;
+  font-family: Montserrat, system-ui, sans-serif;
   flex-wrap: wrap;
   gap: 4px 12px;
   align-items: baseline;
@@ -114,6 +115,15 @@ body,
   gap: 10px;
   align-items: baseline;
   min-width: 0;
+}
+
+.menu-label {
+  font-weight: 300;
+}
+
+.menu-count {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .menu-button {
@@ -160,6 +170,7 @@ body,
   left: var(--panel-left, 16px);
   width: min(var(--menu-width), calc(100vw - 32px));
   color: var(--text-soft);
+  font-family: "IBM Plex Sans Condensed", system-ui, sans-serif;
   font-size: 16px;
   font-weight: 400;
   line-height: normal;
@@ -307,10 +318,43 @@ body,
 .panel .plot {
   position: absolute;
   inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+
+.box {
+  position: absolute;
+  border: 1px solid var(--tick);
+  pointer-events: none;
+}
+
+.box.draft {
+  border-style: dashed;
+  background: rgb(255 255 255 / 8%);
+}
+
+.box-bar {
+  position: absolute;
+  top: 12px;
+  left: 24px;
+  color: var(--text-muted);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.box-bar p {
+  margin: 0;
+}
+
+.box-bar .pill {
+  background: var(--background);
+  pointer-events: auto;
 }
 
 .empty {
   position: absolute;
+  pointer-events: none;
   inset: 0;
   display: grid;
   place-items: center;
@@ -327,6 +371,7 @@ body,
 
 .month {
   position: absolute;
+  cursor: default;
   right: calc(100% + 16px);
   color: var(--text-soft);
   font-size: 15px;
@@ -345,6 +390,7 @@ body,
 
 .x-axis {
   position: absolute;
+  cursor: default;
   top: 100%;
   right: 0;
   left: 0;
@@ -632,6 +678,12 @@ body,
 
   .header {
     padding: 10px 16px;
+  }
+
+  .box-bar {
+    top: 8px;
+    left: 16px;
+    font-size: 12px;
   }
 
   .sentence {
