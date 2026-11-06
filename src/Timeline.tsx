@@ -1,10 +1,16 @@
-import { useRef, type KeyboardEvent, type PointerEvent } from "react";
+import { useMemo, useRef, type KeyboardEvent, type PointerEvent } from "react";
 import type { Month } from "./data";
 
 /** Indexes into the day list. The range covers `from` up to, but not including, `to`. */
 export type DayRange = [from: number, to: number];
 
 type DragKind = "from" | "to" | "band";
+
+// The chart and day ticks share one SVG coordinate system, stretched to fit the track.
+const VIEW_WIDTH = 1000;
+const VIEW_HEIGHT = 100;
+const CHART_HEIGHT = 90;
+const DAY_TICK_HEIGHT = 9;
 
 interface Drag {
   kind: DragKind;
@@ -15,6 +21,7 @@ interface Drag {
 interface TimelineProps {
   days: number[];
   months: Month[];
+  dailyCounts: Uint32Array;
   span: number;
   range: DayRange;
   isFiltered: boolean;
@@ -24,12 +31,47 @@ interface TimelineProps {
 
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
 
-export function Timeline({ days, months, span, range, isFiltered, formatDay, onChange }: TimelineProps) {
+function dayTicksPath(days: number[], months: Month[], span: number) {
+  const monthStarts = new Set(months.map(({ t }) => t));
+  return days
+    .filter((day) => !monthStarts.has(day))
+    .map((day) => `M${(day / span) * VIEW_WIDTH} 0V${DAY_TICK_HEIGHT}`)
+    .join("");
+}
+
+/** Plots each day's count at the middle of that day. */
+function countChartPaths(days: number[], dailyCounts: Uint32Array, span: number) {
+  const peak = Math.max(1, ...dailyCounts);
+  const middleOfDay = (day: number) => ((days[day]! + days[day + 1]!) / 2 / span) * VIEW_WIDTH;
+  const points = Array.from(dailyCounts, (count, day) => {
+    return `${middleOfDay(day)} ${VIEW_HEIGHT - (count / peak) * CHART_HEIGHT}`;
+  });
+  const line = `M${points.join("L")}`;
+  const lastX = middleOfDay(dailyCounts.length - 1);
+  return { line, area: `${line}L${lastX} ${VIEW_HEIGHT}L${middleOfDay(0)} ${VIEW_HEIGHT}Z` };
+}
+
+export function Timeline({
+  days,
+  months,
+  dailyCounts,
+  span,
+  range,
+  isFiltered,
+  formatDay,
+  onChange,
+}: TimelineProps) {
   const track = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
   const lastDay = days.length - 1;
   const [from, to] = range;
   const percent = (t: number) => `${(t / span) * 100}%`;
+
+  const dayTicks = useMemo(() => dayTicksPath(days, months, span), [days, months, span]);
+  const chart = useMemo(
+    () => countChartPaths(days, dailyCounts, span),
+    [days, dailyCounts, span],
+  );
 
   const nearestDay = (clientX: number) => {
     const { left, width } = track.current!.getBoundingClientRect();
@@ -105,7 +147,17 @@ export function Timeline({ days, months, span, range, isFiltered, formatDay, onC
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
         />
-        {months.slice(1, -1).map(({ t }) => (
+        <svg
+          className="chart"
+          viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path className="chart-area" d={chart.area} />
+          <path className="chart-line" d={chart.line} />
+          <path className="day-ticks" d={dayTicks} />
+        </svg>
+        {months.slice(0, -1).map(({ t }) => (
           <div className="tick" key={t} style={{ left: percent(t) }} />
         ))}
         {handle("from", from, "Start date", from)}

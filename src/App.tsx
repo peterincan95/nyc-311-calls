@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { loadCalls, type CallData, type Month } from "./data";
 import { CallRenderer, type Rect } from "./renderer";
-import { selectCalls } from "./selection";
+import { countCallsByDay, selectCalls } from "./selection";
 import { SubjectMenu } from "./SubjectMenu";
 import { Timeline, type DayRange } from "./Timeline";
 
@@ -70,6 +70,7 @@ function Explorer({ data }: { data: CallData }) {
     () => selectCalls(data, subject, tFrom, tTo),
     [data, subject, tFrom, tTo],
   );
+  const dailyCounts = useMemo(() => countCallsByDay(data, subject), [data, subject]);
 
   useLayoutEffect(() => {
     let current: CallRenderer;
@@ -140,14 +141,14 @@ function Explorer({ data }: { data: CallData }) {
               <span
                 className="month"
                 key={month.t}
-                style={{ bottom: `${(month.t / span) * 100}%` }}
+                style={{ top: `${(month.t / span) * 100}%` }}
               >
                 {monthLabel(month, index)}
               </span>
             ))}
             {isFiltered &&
               [tFrom, tTo].map((t, index) => (
-                <div className="edge" key={index} style={{ bottom: `${(t / span) * 100}%` }} />
+                <div className="edge" key={index} style={{ top: `${(t / span) * 100}%` }} />
               ))}
           </div>
         </section>
@@ -156,6 +157,7 @@ function Explorer({ data }: { data: CallData }) {
       <Timeline
         days={meta.days}
         months={meta.months}
+        dailyCounts={dailyCounts}
         span={span}
         range={range}
         isFiltered={isFiltered}

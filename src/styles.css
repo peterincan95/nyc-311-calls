@@ -7,7 +7,8 @@
   --menu-active: #444;
   --track: #202020;
   --band: #5a5a5a;
-  --tick: #d8d8d8;
+  --tick: #e8e8e8;
+  --day-tick: #8c8c8c;
   --timeline-height: 112px;
   --month-column: 130px;
   font-family: "Avenir Next", Avenir, "Segoe UI", system-ui, sans-serif;
@@ -191,7 +192,7 @@ body,
   font-size: 16px;
   line-height: 1;
   white-space: nowrap;
-  transform: translateY(50%);
+  transform: translateY(-50%);
 }
 
 .edge {
@@ -230,13 +231,43 @@ body,
   background: var(--band);
 }
 
+.chart {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.chart-area {
+  fill: #fff;
+  fill-opacity: 0.2;
+}
+
+.chart-line {
+  fill: none;
+  stroke: #fff;
+  stroke-opacity: 0.55;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.day-ticks {
+  fill: none;
+  stroke: var(--day-tick);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+  vector-effect: non-scaling-stroke;
+}
+
 .tick {
   position: absolute;
   top: 0;
-  bottom: 0;
-  width: 1px;
+  width: 3px;
+  height: 25%;
   background: var(--tick);
   pointer-events: none;
+  transform: translateX(-50%);
 }
 
 .handle {
@@ -297,5 +328,9 @@ body,
   .month {
     right: calc(100% + 8px);
     font-size: 12px;
+  }
+
+  .day-ticks {
+    display: none;
   }
 }

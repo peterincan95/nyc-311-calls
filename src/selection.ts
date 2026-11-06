@@ -34,6 +34,23 @@ function addSlice(slices: Slice[], first: number, count: number) {
   else slices.push({ first, count });
 }
 
+/** The number of plotted calls on each day. `days` holds each day's start, plus the final end. */
+export function countCallsByDay({ meta, words }: CallData, subject: Subject | null): Uint32Array {
+  const { days, subjects } = meta;
+  const counts = new Uint32Array(days.length - 1);
+
+  for (const { start, count } of subject ? [subject] : subjects) {
+    const end = start + count;
+    let from = start;
+    counts.forEach((_, day) => {
+      const to = firstAtOrAfter(words, from, end, days[day + 1]!);
+      counts[day]! += to - from;
+      from = to;
+    });
+  }
+  return counts;
+}
+
 /**
  * Calls are sorted by subject, then time, so each subject contributes one run
  * before the range, one inside it and one after it.

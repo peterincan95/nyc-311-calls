@@ -364,7 +364,8 @@ export class CallRenderer {
     this.drawSlices(selection.inside, weight);
 
     this.setPanel(scatter);
-    this.setProjection([SCATTER_FILL_X, 1], 1);
+    // A negative fill runs time downward, with the oldest calls at the top.
+    this.setProjection([SCATTER_FILL_X, -1], 1);
     this.drawSlices(selection.inside, weight);
     this.drawSlices(selection.outside, weight * OUTSIDE_RANGE_WEIGHT);
 
