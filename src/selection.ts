@@ -1,4 +1,5 @@
 import type { CallData, Subject } from "./data";
+import type { TagFilter } from "./filters";
 
 /** A run of consecutive calls in the data buffer. */
 export interface Slice {
@@ -6,13 +7,14 @@ export interface Slice {
   count: number;
 }
 
-export interface Selection {
-  /** Calls inside the time range. */
+export interface Selection extends TagFilter {
+  /** Calls inside the time range, before the tag filter. */
   inside: Slice[];
-  /** The subject's calls outside the time range. */
+  /** The filter's calls outside the time range, before the tag filter. */
   outside: Slice[];
+  /** Calls matching every filter, inside the time range. */
   insideCount: number;
-  /** Plotted calls for the subject across the whole year. */
+  /** Calls matching every filter across the whole year. */
   totalCount: number;
 }
 
@@ -34,44 +36,61 @@ function addSlice(slices: Slice[], first: number, count: number) {
   else slices.push({ first, count });
 }
 
-/** The number of plotted calls on each day. `days` holds each day's start, plus the final end. */
-export function countCallsByDay({ meta, words }: CallData, subject: Subject | null): Uint32Array {
-  const { days, subjects } = meta;
+/**
+ * The number of matching calls on each day, from one pass over the filter's calls.
+ * Each subject's calls are in time order, so the day only ever moves forward.
+ */
+export function countCallsByDay(
+  { meta, words, tags }: CallData,
+  subjects: Subject[],
+  { mask, match }: TagFilter,
+): Uint32Array {
+  const { days } = meta;
   const counts = new Uint32Array(days.length - 1);
 
-  for (const { start, count } of subject ? [subject] : subjects) {
-    const end = start + count;
-    let from = start;
-    counts.forEach((_, day) => {
-      const to = firstAtOrAfter(words, from, end, days[day + 1]!);
-      counts[day]! += to - from;
-      from = to;
-    });
+  for (const { start, count } of subjects) {
+    let day = 0;
+    let nextDay = days[1]!;
+    for (let call = start; call < start + count; call += 1) {
+      const t = words[call * 2 + 1]!;
+      while (t >= nextDay) {
+        day += 1;
+        nextDay = days[day + 1]!;
+      }
+      if ((tags[call]! & mask) === match) counts[day]! += 1;
+    }
   }
   return counts;
 }
 
 /**
  * Calls are sorted by subject, then time, so each subject contributes one run
- * before the range, one inside it and one after it.
+ * before the range, one inside it and one after it. The renderer applies the
+ * tag filter to those runs. `from` and `to` are indexes into the day list.
  */
 export function selectCalls(
   { meta, words }: CallData,
-  subject: Subject | null,
-  tFrom: number,
-  tTo: number,
+  subjects: Subject[],
+  tags: TagFilter,
+  dailyCounts: Uint32Array,
+  from: number,
+  to: number,
 ): Selection {
-  const selection: Selection = { inside: [], outside: [], insideCount: 0, totalCount: 0 };
+  const selection: Selection = { ...tags, inside: [], outside: [], insideCount: 0, totalCount: 0 };
+  const tFrom = meta.days[from]!;
+  const tTo = meta.days[to]!;
 
-  for (const { start, count } of subject ? [subject] : meta.subjects) {
+  for (const { start, count } of subjects) {
     const end = start + count;
-    const from = firstAtOrAfter(words, start, end, tFrom);
-    const to = firstAtOrAfter(words, from, end, tTo);
-    addSlice(selection.outside, start, from - start);
-    addSlice(selection.inside, from, to - from);
-    addSlice(selection.outside, to, end - to);
-    selection.insideCount += to - from;
-    selection.totalCount += count;
+    const first = firstAtOrAfter(words, start, end, tFrom);
+    const last = firstAtOrAfter(words, first, end, tTo);
+    addSlice(selection.outside, start, first - start);
+    addSlice(selection.inside, first, last - first);
+    addSlice(selection.outside, last, end - last);
   }
+  dailyCounts.forEach((count, day) => {
+    selection.totalCount += count;
+    if (day >= from && day < to) selection.insideCount += count;
+  });
   return selection;
 }
