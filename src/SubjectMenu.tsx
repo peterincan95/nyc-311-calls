@@ -1,23 +1,22 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { Subject } from "./data";
 
-const ALL_CALLS = "All calls";
-
 interface Option {
   id: number | null;
   name: string;
 }
 
 interface SubjectMenuProps {
+  allCallsLabel: string;
   subjects: Subject[];
   selectedId: number | null;
   onSelect: (id: number | null) => void;
 }
 
-export function SubjectMenu({ subjects, selectedId, onSelect }: SubjectMenuProps) {
+export function SubjectMenu({ allCallsLabel, subjects, selectedId, onSelect }: SubjectMenuProps) {
   const options = useMemo<Option[]>(
-    () => [{ id: null, name: ALL_CALLS }, ...subjects.map(({ id, name }) => ({ id, name }))],
-    [subjects],
+    () => [{ id: null, name: allCallsLabel }, ...subjects.map(({ id, name }) => ({ id, name }))],
+    [allCallsLabel, subjects],
   );
   const selectedIndex = options.findIndex(({ id }) => id === selectedId);
 
