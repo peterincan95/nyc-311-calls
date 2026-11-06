@@ -27,6 +27,10 @@ export interface Place extends TagFilter {
 
 const ALL_TAGS = { mask: 0, match: 0 };
 
+// This category's names come from the source data in capitals.
+const CAPITALIZED_GROUP = "Housing Conditions";
+const SMALL_WORDS = new Set(["a", "and", "at", "by", "for", "in", "of", "on", "or", "the", "to"]);
+
 const byName = <T extends { name: string }>(a: T, b: T) =>
   a.name.localeCompare(b.name, "en", { sensitivity: "base" });
 
@@ -35,9 +39,20 @@ export const combineTags = (a: TagFilter, b: TagFilter): TagFilter => ({
   match: a.match | b.match,
 });
 
+/** Title-cases a name in all capitals and leaves any other name alone. */
+function toTitleCase(name: string) {
+  if (name !== name.toUpperCase()) return name;
+  return name
+    .toLowerCase()
+    .replace(/[a-z]+/g, (word, offset: number) =>
+      offset > 0 && SMALL_WORDS.has(word) ? word : word[0]!.toUpperCase() + word.slice(1),
+    );
+}
+
 function complaintItem(subject: Subject, groupName: string): MenuItem<Filter> {
+  const display = (text: string) => (groupName === CAPITALIZED_GROUP ? toTitleCase(text) : text);
   // A complaint can't share its category's name, or the two would look identical.
-  const name = subject.name === groupName ? `${groupName} - General` : subject.name;
+  const name = subject.name === groupName ? `${groupName} - General` : display(subject.name);
   return {
     name,
     value: { name, subjects: [subject], ...ALL_TAGS },
@@ -45,9 +60,9 @@ function complaintItem(subject: Subject, groupName: string): MenuItem<Filter> {
     parent: groupName,
     hint: "No further details",
     children: subject.details.map((detail) => ({
-      name: detail.name,
+      name: display(detail.name),
       value: {
-        name: `${name}: ${detail.name}`,
+        name: `${name}: ${display(detail.name)}`,
         subjects: [subject],
         mask: DETAIL_MASK,
         match: detail.id,

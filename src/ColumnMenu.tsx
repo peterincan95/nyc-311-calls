@@ -35,7 +35,18 @@ interface ColumnMenuProps<T> {
   selected: T;
   selectedName: string;
   onSelect: (value: T) => void;
+  /** How many calls an item would show. Only called while the menu is open. */
+  countOf: (value: T) => number;
 }
+
+const compactFormat = (maximumFractionDigits: number) =>
+  new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits });
+const thousandsFormat = compactFormat(0);
+const millionsFormat = compactFormat(1);
+
+/** 165, 17k or 3.8M. */
+const formatCount = (count: number) =>
+  (count < 1_000_000 ? thousandsFormat : millionsFormat).format(count).replace("K", "k");
 
 function pathTo<T>(items: MenuItem<T>[], value: T): number[] | null {
   for (const [index, item] of items.entries()) {
@@ -82,6 +93,7 @@ export function ColumnMenu<T>({
   selected,
   selectedName,
   onSelect,
+  countOf,
 }: ColumnMenuProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -272,6 +284,15 @@ export function ColumnMenu<T>({
 
   const optionClass = (state?: string) => (state ? `menu-option ${state}` : "menu-option");
 
+  const itemName = ({ name, value }: MenuItem<T>) => (
+    <span>
+      {name}
+      {value !== undefined && (
+        <span className="menu-count"> ({formatCount(countOf(value))})</span>
+      )}
+    </span>
+  );
+
   const renderColumn = (column: number) => {
     const parent = parentOf(column);
     const members = columns[column]!;
@@ -299,7 +320,7 @@ export function ColumnMenu<T>({
               onPointerLeave={cancelHover}
               onClick={() => clickItem(item, column, index)}
             >
-              <span>{item.name}</span>
+              {itemName(item)}
               {item.children.length > 0 && <span className="menu-more" aria-hidden="true" />}
             </div>
           );
@@ -326,7 +347,7 @@ export function ColumnMenu<T>({
         }}
         onClick={() => choose(item.value!)}
       >
-        <span>{item.name}</span>
+        {itemName(item)}
         {item.parent && <span className="menu-parent">{item.parent}</span>}
       </div>
     );
@@ -340,7 +361,9 @@ export function ColumnMenu<T>({
         isTouch.current = event.pointerType === "touch";
       }}
     >
-      <span id={`${id}-label`}>{label}</span>
+      <span className="menu-label" id={`${id}-label`}>
+        {label}
+      </span>
       <button
         type="button"
         className="menu-button"

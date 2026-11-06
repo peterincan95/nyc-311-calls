@@ -1,5 +1,5 @@
-import { BYTES_PER_CALL, type CallData } from "./data";
-import type { Selection, Slice } from "./selection";
+import { BYTES_PER_CALL, type CallData, type Meta } from "./data";
+import { GRID_MAX, type Selection, type Slice } from "./selection";
 
 export interface Rect {
   left: number;
@@ -43,10 +43,13 @@ const MAX_PIXEL_RATIO = 2;
 const MAP_FILL = 0.94;
 export const SCATTER_FILL_X = 0.96;
 
+// Width of a point in CSS pixels, rounded to whole device pixels when drawn.
+const POINT_SIZE = 1.7;
+
 // Brightness of one call. It falls once points would cover a plot more than this
 // many times over, so dense views keep their detail and look alike at any size.
-const POINT_WEIGHT = 0.6;
-const FULL_WEIGHT_COVERAGE = 1.1;
+const POINT_WEIGHT = 0.3;
+const FULL_WEIGHT_COVERAGE = 0.6;
 const WEIGHT_FALLOFF = 0.95;
 const OUTSIDE_RANGE_WEIGHT = 0.16;
 const NEAR_GLOW = 0.3;
@@ -63,9 +66,11 @@ uniform float u_timeSpan;
 uniform float u_pointSize;
 uniform uint u_tagMask;
 uniform uint u_tagMatch;
+uniform vec4 u_area;
 void main() {
   gl_PointSize = u_pointSize;
-  if ((a_tags & u_tagMask) != u_tagMatch) {
+  bool outsideArea = any(lessThan(a_position, u_area.xy)) || any(greaterThan(a_position, u_area.zw));
+  if ((a_tags & u_tagMask) != u_tagMatch || outsideArea) {
     // Outside the clip volume, so the point is never drawn.
     gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
     return;
@@ -136,6 +141,9 @@ uniform float u_nearGlow;
 uniform float u_farGlow;
 out vec4 color;
 ${TONE}
+// Warm amber, fading to pale cream where calls are densest.
+const vec3 AMBER = vec3(0.910, 0.598, 0.400);
+const vec3 CREAM = vec3(1.0, 0.910, 0.724);
 float noise(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
 void main() {
   float core = tone(texture(u_density, v_uv).r);
@@ -143,8 +151,22 @@ void main() {
   float far = clamp(texture(u_far, v_uv).r * u_farGlow, 0.0, 1.0);
   float light = 1.0 - (1.0 - core) * (1.0 - near) * (1.0 - far);
   light += (noise(gl_FragCoord.xy) - 0.5) / 255.0;
-  color = vec4(vec3(light), 1.0);
+  color = vec4(light * mix(AMBER, CREAM, smoothstep(0.8, 1.0, light)), 1.0);
 }`;
+
+/** The share of the map panel's width and height the city fills, keeping it undistorted. */
+export function mapFill(
+  { lonMin, lonMax, latMin, latMax }: Meta["bounds"],
+  width: number,
+  height: number,
+): [number, number] {
+  const middleLatitude = ((latMin + latMax) / 2) * (Math.PI / 180);
+  const cityAspect = ((lonMax - lonMin) * Math.cos(middleLatitude)) / (latMax - latMin);
+  const panelAspect = width / height;
+  return panelAspect > cityAspect
+    ? [(MAP_FILL * cityAspect) / panelAspect, MAP_FILL]
+    : [MAP_FILL, (MAP_FILL * panelAspect) / cityAspect];
+}
 
 function compile(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
   const shader = gl.createShader(type)!;
@@ -304,6 +326,7 @@ export class CallRenderer {
         "u_weight",
         "u_tagMask",
         "u_tagMatch",
+        "u_area",
       ]),
       downsample: createProgram(gl, FULLSCREEN_VERTEX, DOWNSAMPLE_FRAGMENT, [
         "u_source",
@@ -370,15 +393,29 @@ export class CallRenderer {
     gl.uniform1f(points.uniforms.u_timeSpan!, meta.tEnd - meta.tStart);
     gl.uniform1ui(points.uniforms.u_tagMask!, selection.mask);
     gl.uniform1ui(points.uniforms.u_tagMatch!, selection.match);
-    const pointSize = Math.max(1, Math.round(this.pixelRatio));
+    // Half a grid step past each edge, so rounding can't drop calls on the edge.
+    const { west, east, south, north } = selection.area;
+    gl.uniform4f(
+      points.uniforms.u_area!,
+      (west - 0.5) / GRID_MAX,
+      (south - 0.5) / GRID_MAX,
+      (east + 0.5) / GRID_MAX,
+      (north + 0.5) / GRID_MAX,
+    );
+    const pointSize = Math.max(1, Math.round(POINT_SIZE * this.pixelRatio));
     gl.uniform1f(points.uniforms.u_pointSize!, pointSize);
 
-    const mapFill = this.mapFill(map);
-    const mapWeight = this.pointWeight(selection, pointSize, map, mapFill[0] * mapFill[1]);
-    const scatterWeight = this.pointWeight(selection, pointSize, scatter, SCATTER_FILL_X);
+    const fill = mapFill(this.data.meta.bounds, map.width, map.height);
+    // Points in a box are as crowded as they were, so measure coverage within the box.
+    const boxWidth = (east - west) / GRID_MAX;
+    const boxHeight = (north - south) / GRID_MAX;
+    const mapShare = fill[0] * fill[1] * boxWidth * boxHeight;
+    const mapWeight = this.pointWeight(selection, pointSize, map, mapShare);
+    const scatterShare = SCATTER_FILL_X * boxWidth;
+    const scatterWeight = this.pointWeight(selection, pointSize, scatter, scatterShare);
 
     this.setPanel(map);
-    this.setProjection(mapFill, 0);
+    this.setProjection(fill, 0);
     this.drawSlices(selection.inside, mapWeight);
 
     this.setPanel(scatter);
@@ -407,17 +444,6 @@ export class CallRenderer {
     const plotPixels = rect.width * rect.height * this.pixelRatio ** 2 * filled;
     const coverage = (selection.totalCount * pointSize ** 2) / plotPixels;
     return POINT_WEIGHT * Math.min(1, (FULL_WEIGHT_COVERAGE / coverage) ** WEIGHT_FALLOFF);
-  }
-
-  /** The share of the map panel the city fills, keeping it undistorted. */
-  private mapFill(rect: Rect): [number, number] {
-    const { lonMin, lonMax, latMin, latMax } = this.data.meta.bounds;
-    const middleLatitude = ((latMin + latMax) / 2) * (Math.PI / 180);
-    const cityAspect = ((lonMax - lonMin) * Math.cos(middleLatitude)) / (latMax - latMin);
-    const panelAspect = rect.width / rect.height;
-    return panelAspect > cityAspect
-      ? [(MAP_FILL * cityAspect) / panelAspect, MAP_FILL]
-      : [MAP_FILL, (MAP_FILL * panelAspect) / cityAspect];
   }
 
   private setProjection([fillX, fillY]: [number, number] | number[], timeAsY: number) {
