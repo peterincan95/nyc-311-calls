@@ -1,0 +1,301 @@
+:root {
+  --background: #050505;
+  --text: #fff;
+  --text-muted: #a8a8a8;
+  --divider: #2a2a2a;
+  --menu: #2c2c2c;
+  --menu-active: #444;
+  --track: #202020;
+  --band: #5a5a5a;
+  --tick: #d8d8d8;
+  --timeline-height: 112px;
+  --month-column: 130px;
+  font-family: "Avenir Next", Avenir, "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+  background: var(--background);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+.status {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  padding: 16px;
+  color: var(--text-muted);
+  font-size: 18px;
+  text-align: center;
+}
+
+.app {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) var(--timeline-height);
+  height: 100%;
+  overflow: hidden;
+}
+
+.stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 0;
+}
+
+.points {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.panel {
+  position: relative;
+  min-width: 0;
+}
+
+.panel .plot {
+  position: absolute;
+  inset: 0;
+}
+
+.scatter {
+  border-left: 1px solid var(--divider);
+}
+
+.scatter .plot {
+  inset: 24px 24px 24px var(--month-column);
+}
+
+.heading {
+  position: absolute;
+  top: 40px;
+  left: 48px;
+  z-index: 2;
+  max-width: calc(100% - 64px);
+  text-shadow: 0 0 3px #000, 0 0 10px #000;
+}
+
+.heading h1 {
+  margin: 0 0 12px;
+  font-size: 56px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.subject {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  font-size: 24px;
+  font-weight: 500;
+}
+
+.subject-control {
+  position: relative;
+  min-width: 0;
+}
+
+.subject-button {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  max-width: 100%;
+  padding: 0 0 1px;
+  border: 0;
+  border-bottom: 2px solid var(--text);
+  color: inherit;
+  font: inherit;
+  background: none;
+  cursor: pointer;
+}
+
+.subject-button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 3px;
+}
+
+.subject-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.caret {
+  flex: none;
+  border: 6px solid transparent;
+  border-top-color: var(--text);
+  border-bottom-width: 0;
+  transform: translateY(6px);
+}
+
+.caret-open {
+  transform: translateY(6px) rotate(180deg);
+}
+
+.subject-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  max-height: min(380px, 50vh);
+  margin: 0;
+  padding: 6px 0;
+  overflow-y: scroll;
+  font-size: 20px;
+  font-weight: 400;
+  color: #d8d8d8;
+  text-shadow: none;
+  list-style: none;
+  background: var(--menu);
+  scrollbar-color: #777 var(--menu);
+  scrollbar-width: thin;
+}
+
+.subject-list li {
+  padding: 7px 14px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.subject-list li.active {
+  color: var(--text);
+  background: var(--menu-active);
+}
+
+.subject-list li[aria-selected="true"] {
+  font-weight: 600;
+}
+
+.summary {
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.month {
+  position: absolute;
+  right: calc(100% + 20px);
+  color: #d8d8d8;
+  font-size: 16px;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translateY(50%);
+}
+
+.edge {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: #e8e8e8;
+}
+
+.timeline {
+  position: relative;
+  padding: 24px 16px 0;
+  background: var(--background);
+}
+
+.track {
+  position: relative;
+  height: 100%;
+  background: var(--track);
+}
+
+.band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.band:active {
+  cursor: grabbing;
+}
+
+.band-filtered {
+  background: var(--band);
+}
+
+.tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--tick);
+  pointer-events: none;
+}
+
+.handle {
+  position: absolute;
+  top: -24px;
+  z-index: 1;
+  width: 16px;
+  height: 26px;
+  background: #d8d8d8;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.handle:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.handle-from {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 62%);
+  transform: translateX(-100%);
+}
+
+.handle-to {
+  clip-path: polygon(0 0, 100% 0, 100% 62%, 0 100%);
+}
+
+@media (max-width: 760px) {
+  :root {
+    --month-column: 72px;
+    --timeline-height: 88px;
+  }
+
+  .stage {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .scatter {
+    border-top: 1px solid var(--divider);
+    border-left: 0;
+  }
+
+  .heading {
+    top: 16px;
+    left: 16px;
+    max-width: calc(100% - 32px);
+  }
+
+  .heading h1 {
+    font-size: 32px;
+  }
+
+  .subject {
+    font-size: 18px;
+  }
+
+  .month {
+    right: calc(100% + 8px);
+    font-size: 12px;
+  }
+}

@@ -1,0 +1,954 @@
+id,name
+1,1 or 2
+2,3 or More
+3,Abandoned Bike
+4,Absent
+5,Adjacent Buildings Not Protected
+6,Adult Establishment
+7,Advertising Sign/Billboard/Posters/Flexible Fabric - Illegal
+8,Affecting Sewer or Foundation
+9,After Hours - Licensed Est
+10,After Hours Work - Illegal
+11,After Hours Work - With An AHV Permit
+12,Air Conditioning Problem
+13,"Air: Dust, Construction/Demolition (AE4)"
+14,"Air: Dust, Other (Use Comments) (AE5)"
+15,"Air: Odor, Nail Salon (AD8)"
+16,"Air: Odor, Sweet From Unknown Source (AZ1)"
+17,"Air: Odor/Fumes, Dry Cleaners (AD1)"
+18,"Air: Odor/Fumes, Restaurant (AD2)"
+19,"Air: Odor/Fumes, Vehicle Idling (AD3)"
+20,Air: Other Air Problem (Use Comments) (AZZ)
+21,"Air: Smoke, Chimney or vent (AS1)"
+22,"Air: Smoke, Vehicular (AA4)"
+23,Airline
+24,Allergy Information
+25,Allowed in Smoke Free Area
+26,American Flag
+27,Amount Owed Dispute
+28,Animal Odor
+29,Animal Waste
+30,Animals Sold From Residence
+31,Announcements
+32,APARTMENT ONLY
+33,Appliances
+34,APS
+35,Arcade
+36,Art Supply Store
+37,Asbestos
+38,Asbestos Complaint (B1)
+39,Ashtray in Smoke-Free Area
+40,Auction House or Auctioneer
+41,Automated Employment Decision Tool Use
+42,Bag/Wallet
+43,Bail Bond Agent
+44,Banging/Pounding
+45,Banned Tobacco Flavors Sold
+46,"Barber Shop, Beauty Salon, or Nail Salon"
+47,Bare Hands in Contact w/ Food
+48,Barrier Condition
+49,Base Door
+50,Basement
+51,BASIN/SINK
+52,BATHTUB/SHOWER
+53,BBQ Outside Authorized Area
+54,Beach/Pool Water
+55,Beach/Pool/Sauna Unpermitted
+56,Beekeeping - Honeybees
+57,Bees/Wasps - Not a beekeper
+58,BELL/BUZZER/INTERCOM
+59,Bent/Loose
+60,Bicycle Chained to Tree
+61,Bike Lane
+62,Bike Signal
+63,Bikes in Buildings
+64,Biking/Rollerblading off Path
+65,Bin Not Used
+66,Bird
+67,Bird Bath
+68,Blank Out Matrix Sgn
+69,Blocked - ATM
+70,Blocked - Construction
+71,Blocked Bike Lane
+72,Blocked Crosswalk
+73,Blocked Hydrant
+74,Blocked Sidewalk
+75,Blocking Sidewalk
+76,Blocking Sidewalk or Street
+77,Blocking Street
+78,"Bodega, Deli, or Convenience Store"
+79,BOILER
+80,Boiler - Defective/Inoperative/No Permit
+81,Book/Stationery
+82,Booting Company
+83,Box Cover
+84,Bracket Arm Bent
+85,Bracket Arm Broken
+86,Bracket Arm Loose
+87,Bracket Arm Missing
+88,Branch Cracked and Will Fall
+89,Branch or Limb Has Fallen Down
+90,Branches Damaged
+91,Broken Curb
+92,Broken Fence
+93,Broken Glass
+94,Broken Lock
+95,Broken or Defective
+96,Broken Sidewalk
+97,Broken Water Fountain
+98,Broken Window
+99,Broken/Cracked/Damaged Glass
+100,Broken/Defective
+101,Building
+102,"Building - Vacant, Open And Unguarded"
+103,Building Foundation
+104,Building Permit - None
+105,Building Shaking/Vibrating/Structural Stability
+106,Bulky Recycling
+107,Bulky Trash
+108,Bus Stop
+109,CABINET
+110,Cable
+111,Canopy Complaint
+112,Car Rental
+113,Car Service Company Complaint
+114,Car Service Company Report
+115,Car Wash
+116,Car/Truck Horn
+117,Car/Truck Music
+118,CARBON MONOXIDE DETECTOR
+119,Carpet and Flooring Business
+120,Cat
+121,Cat Sold
+122,Catch Basin Clogged/Flooding (Use Comments) (SC)
+123,Catch Basin Grating Missing (SA4)
+124,Catch Basin Search (SC2)
+125,Catch Basin Sunken/Damaged/Raised (SC1)
+126,Catering Establishment
+127,Cave-in
+128,CEILING
+129,Cell Phone Store
+130,Cellar Door Defective
+131,Cellar Door New
+132,Cellar Door Open/Unprotected
+133,Chained
+134,Chained to Public Property
+135,Chemical Odor (HD1)
+136,Chemical Spill (IAC)
+137,Chemical Spill/Release (HA1)
+138,Chemical Vapors/Gases/Odors
+139,Chronic
+140,Chronic Dumping
+141,Chronic Speeding
+142,Chronic Stoplight Violation
+143,Cleanliness
+144,Clear Street Light
+145,"Clear Water With Organisms (Insects, Worms) (QE2)"
+146,Clear Water With Other Particles (Use Comments) (QEZ)
+147,"Clothing, Shoe, or Accessories Store"
+148,Clothing/Glasses
+149,Cloudy Or Milky Water (QB1)
+150,"Cloudy Or Milky, Other (Use Comments) (QBZ)"
+151,CMU Communication
+152,Coax Cable
+153,Coin or Card Did Not Register
+154,Coin-Operated Ride
+155,Collection Days
+156,Coming into Apartment
+157,Commercial Overnight Parking
+158,Common Areas and Apartment
+159,Compost
+160,Concrete Around Hydrant
+161,Concrete Barrier
+162,Concrete In Catch Basin (IEA)
+163,Condition Attracting Rodents
+164,Conduit
+165,Condulet Cover
+166,Cone
+167,Conflict Monitor
+168,Congestion/Gridlock
+169,Cons - Contrary/Beyond Approved Plans/Permits
+170,Construction
+171,Construction - Change Grade/Watercourse
+172,Construction Debris
+173,Construction Labor Provider
+174,Container - Over 5 Gallons
+175,Container - Under 5 Gallons
+176,Containers Left Out After Collection
+177,Containers Set Out Too Early
+178,Contamination Risk
+179,Control Panel Damaged
+180,Controller
+181,Controller Cabinet
+182,Controller Flasher
+183,COOKING GAS
+184,Crane/Suspension Scaffold - No Permit/License/Cert./Unsafe/Illegal
+185,Crash Cushion Defect
+186,Credit Card Stuck in Meter
+187,CSC - Monitoring Tracking
+188,CSE - Tracking Compliance
+189,Culvert Blocked/Needs Cleaning (SE)
+190,Curb Cut/Driveway/Carport - Illegal
+191,Curb Defect-Metal Protruding
+192,Curb Violation
+193,Curbside Composting
+194,Damaged Bench
+195,Damaged Door
+196,Damaged Leg or Pole Bent
+197,Damaged or Leaking Roof
+198,Damaged or Missing Ad Box
+199,Damaged or Vandalized
+200,Damaged Other
+201,Damaged Safety Alert Buttons
+202,Damaged Telephone
+203,Damaged Toilet/Sink
+204,Damaged/Bent/Loose/Leaning
+205,Damaged/Defective
+206,Damaged/Leaking Roof
+207,DAMP SPOT
+208,Day Care Facility
+209,Dead Animal
+210,Dead Branches in Tree
+211,Dead End Signal
+212,Dealer in Products for the Disabled
+213,Debris - Excessive
+214,Debris - Falling Or In Danger Of Falling
+215,Debris from Car Accident
+216,Debt Collection Agency
+217,Deck Inspection
+218,Decorative Necklace Lighting
+219,Deer
+220,Defacement
+221,Defective Catch Basin
+222,Defective Hardware
+223,Defective Manhole Cover
+224,Defective Streetlight
+225,Defective Water Sampling Station (QSS)
+226,Defective/Missing Curb Piece (SC4)
+227,Delays
+228,Demolition - No Permit
+229,Demolition - Unsafe
+230,Department Store or Megastore
+231,Depression Maintenance
+232,Derelict Vehicles
+233,Det-Sens Cabinet
+234,Detached Trailer
+235,Detector Sensor
+236,Detour
+237,Dirt or Gravel
+238,"Dirt, Debris, Litter Complaint"
+239,"Dirt, Litter, Debris - Garage"
+240,"Dirt, Litter, Debris - Lot"
+241,Dirty Water (WE)
+242,Dirty/Graffiti
+243,Dirty/Graffiti/Stickers
+244,Dirty/Inadequate Eqp/Facility
+245,Dishwashing/Utensils
+246,Disruptive Passenger
+247,Do Not Block the Box
+248,Do Not Enter
+249,Dog
+250,Dog Off Leash
+251,Dog Sold
+252,Dog Waste
+253,Domestic Strays
+254,Domestic Worker Employment Agency
+255,Donation Collection Bin
+256,DOOR
+257,DOOR FRAME
+258,Door Lock
+259,Door to Door Sales
+260,DOOR TO DUMBWAITER
+261,DOOR/FRAME
+262,Double Parked Blocking Traffic
+263,Double Parked Blocking Vehicle
+264,Drag Racing
+265,Driver Complaint
+266,Driver Complaint - Non Passenger
+267,Driver Complaint - Passenger
+268,Driver Compliment
+269,Driver Report - Non Passenger
+270,Driver Report - Passenger
+271,Drug Store or Pharmacy
+272,Dry Cleaner
+273,Dry Cleaning Vapors (PERC)
+274,DRY WEATHER DISCHARGE - DWD
+275,Dumpster - Construction Waste
+276,Dust Cover
+277,Dust from Construction
+278,E-Cigarette Sales
+279,Egress - Doors Locked/Blocked/Improper/No Secondary Means
+280,ELECTRIC/GAS RANGE
+281,Electrical Wiring Defective/Exposed
+282,Electronic Screen Bad/Wrong Info
+283,Electronic Screen No Power
+284,Electronic Sign - Overhead
+285,Electronic Sign - Portable
+286,Electronics or Appliance Repair
+287,Electronics Store
+288,Electronics/Phones
+289,Elevator - Multiple Devices On Property
+290,Elevator - Single Device On Property/No Alternate Service
+291,Emergency Personnel Report
+292,Employment Agency
+293,Enclosure Cap
+294,Engine Idling
+295,ENTIRE BUILDING
+296,Entire Tree Has Fallen Down
+297,Equipment
+298,Equipment Complaint
+299,Equipment Maintenance
+300,Excavation Undermining Adjacent Building
+301,Excessive Water In Basement (WEFB)
+302,Exit/Route
+303,Exposure Unnecessary
+304,EXPY Fixture
+305,Facility Construction
+306,Facility Maintenance
+307,Facility Unregistered
+308,Failed Street Cut - DEP
+309,Failed Street Repair
+310,Failure to Comply with Vacate Order
+311,Failure To Maintain
+312,Failure to Post Calorie Information
+313,Failure To Retain Water/Improper Drainage- (LL103/89)
+314,Fallen Debris from Bridge
+315,Fallen Debris from Tunnel
+316,Farm Animal
+317,Fence
+318,Fence - None/Inadequate
+319,FENCING
+320,Ferret
+321,Fire Alarm Lamp Dayburning
+322,Fire Alarm Lamp Missing
+323,FIRE ESCAPE
+324,Fire Globe Missing
+325,Fire Hydrant Emergency (FHE)
+326,Fixture(S)
+327,Fixture/Luminaire Damaged
+328,Fixture/Luminaire Door Open
+329,Fixture/Luminaire Hanging
+330,Fixture/Luminaire Missing
+331,Fixture/Luminaire Out Of Position
+332,Flashing Hazard
+333,Flood Light Lamp Cycling
+334,Flood Light Lamp Dayburning
+335,Flood Light Lamp Dim
+336,Flood Light Lamp Missing
+337,Flood Light Lamp Out
+338,Flooded
+339,FLOOR
+340,Flower Planters
+341,Flyer or Handbill
+342,Food Contains Foreign Object
+343,Food Contaminated
+344,Food Preparation Location
+345,Food Protection
+346,Food Source/Protection
+347,Food Spoiled
+348,Food Temperature
+349,Food Vendor
+350,Food Worker Activity
+351,Food Worker Hygiene
+352,Food Worker Illness
+353,For One Address
+354,For-Profit College or University
+355,Foreign Attachment On Lamppost
+356,Foreign Attachment On Wood Pole
+357,Foundation
+358,Fountain - Over 5 Gallons
+359,Fountain - Under 5 Gallons
+360,Funeral Home
+361,Furniture Store
+362,Games of Chance
+363,Gaming Cafe
+364,Garage or Parking Lot
+365,Garbage or Litter
+366,GARBAGE/RECYCLING STORAGE
+367,Gas Hook-Up/Piping - Illegal Or Defective
+368,Gas Station Convenience Store
+369,Gas Station Pumps
+370,Gasoline Spill (IAA)
+371,General Complaint
+372,General Inquiry
+373,General Maintenance
+374,General Vendor
+375,"Gift, Novelty, or Souvenir Store"
+376,Glassware Broken
+377,Glassware Hanging
+378,Glassware Missing
+379,Graffiti
+380,Graffiti - Bridge
+381,Graffiti - Highway
+382,Graffiti or Vandalism
+383,Graffiti/Dirty Condition
+384,Graffiti/Litter on Phone
+385,Grass/Weeds
+386,Grease In Sewer/Catch Basin (IDG)
+387,Guard Rail - Bridge
+388,Guard Rail - Highway
+389,Guard Rail - Street
+390,GUTTER/LEADER
+391,Handwashing
+392,Hangers
+393,Hardware Store
+394,Heating Problem
+395,HEAVY FLOW
+396,High Grass
+397,High Water Pressure (WHP)
+398,Highway Fence
+399,Highway Flooding (SH)
+400,Hitting Building
+401,Hitting Phone/Cable Lines
+402,Hitting Power Lines
+403,Home Appliance Store
+404,Home Heating Oil Company
+405,Home Improvement Contractor
+406,Homeless Issue
+407,Honorary
+408,Horse-Drawn Cab
+409,Hotel or Motel
+410,Hours of Operation
+411,Human Feces
+412,Hummock
+413,Hyd Valve Box Cover Missing (WV2)
+414,Hydrant Defective (WC2)
+415,Hydrant Knocked Over/Missing (WC)
+416,Hydrant Leaking (WC1)
+417,Hydrant Running (WC3)
+418,Hydrant Running Full (WA4)
+419,Idling or Blocking Traffic
+420,Iguana
+421,Illegal Animal Sold
+422,Illegal Conversion Of Commercial Bldg/Space To Other Uses
+423,Illegal Conversion Of Manufacturing/Industrial Space
+424,Illegal Conversion Of Residential Building/Space
+425,Illegal Hotel Rooms In Residential Building
+426,Illegal Tree Removal/Topo. Change in SNAD
+427,Illegal Use Of A Hydrant (CIN)
+428,Illegal Use Of Hose - Other (CCO)
+429,Illegal Use Of Hose - Private Residence (CCR)
+430,Illegal. Commercial Use In Resident Zone
+431,Illness Caused by Drinking Water
+432,Immigration Services Provider
+433,Improperly Parked or Abandoned
+434,In Car
+435,In Common Areas
+436,In Conduit
+437,In Post Base
+438,In Public
+439,Inadequate Care
+440,Inadequate or No Heat
+441,Inadequate Support Shoring
+442,Inadequate Sweeping
+443,Inappropriate Behavior
+444,Inattentive
+445,Injured Wildlife
+446,Injury or Illness from Tanning
+447,Insects / Pests
+448,installation of hydrant side post (WHFP)
+449,Integrity Complaint Referral
+450,Investigative Inspection
+451,JANITOR/SUPER
+452,Jewelry
+453,Jewelry Store
+454,Junction Box
+455,Kitchen/Food Prep Area
+456,Lack of Supplies
+457,Lamppost Base Door/Cover Damaged
+458,Lamppost Base Door/Cover Missing
+459,Lamppost Base Door/Cover Open
+460,Lamppost Damaged
+461,Lamppost Knocked Down
+462,Lamppost Leaning
+463,Lamppost Missing
+464,Lamppost Wire Exposed
+465,Landlord or Real Estate Agent
+466,Landmark Bldg - Illegal Work
+467,Lane Control Signal
+468,Lane Station
+469,Large Number of Mosquitoes
+470,Laundromat
+471,Lead Kit Request (Residential) (L10)
+472,Leak (Use Comments) (WA2)
+473,Leaky Roof
+474,LED Pedestrian Unit
+475,Letter Grading
+476,License Plate Obscured
+477,Licensee Complaint
+478,LIGHTING
+479,Lighting - Garage
+480,Lighting/Electrical
+481,Lights From Parking Lot Shining On Building
+482,Line/Marking - After Repaving
+483,Line/Marking - Faded
+484,Litter
+485,Locksmith
+486,Loft Building
+487,Loose Plate
+488,Loose/Leaning Sign
+489,Lost and Found
+490,Loud Music/Party
+491,Loud Talking
+492,Loud Television
+493,LOW WATER PRESSURE - WLWP
+494,MAILBOX
+495,MAINTENANCE
+496,Maintenance Cover
+497,Manhole Cover Missing (Emergency) (SA3)
+498,Manhole Overflow (Use Comments) (SA1)
+499,Map Bad/Wrong Info
+500,Mast Arm
+501,Material Storage - Unsafe
+502,Material Stored Improperly
+503,Mattress or Box Spring Uncovered
+504,Merchandise
+505,Messenger
+506,Metal Protruding - Sign Stump
+507,Micromobility Device Store
+508,MICROWAVE
+509,Milk Not Pasteurized
+510,Milk/Dairy Products
+511,Minor Received Tattoo
+512,Missing
+513,Missing/Stump
+514,Misuse
+515,Mobile Food Vendor
+516,MOLD
+517,Monkey
+518,Mouse Sighting
+519,Movie Theater
+520,Moving Company
+521,Multiple St Lts Dayburning
+522,Multiple Street Lights Out
+523,Musical Instrument
+524,N/A
+525,Neglected
+526,New Automatic Public Toilet Request
+527,New Basket
+528,New Bus Stop Shelter Placement
+529,New Con Ed Service Request
+530,News Gathering
+531,Newspaper Box Complaint
+532,Newsstand
+533,No Access
+534,No Animal Handling Certificate
+535,No Certificate Of Occupancy/Illegal/Contrary To CO
+536,No Consent Form
+537,No Dial Tone
+538,No Idling
+539,NO LIGHTING
+540,"No Parking, Standing, Stopping"
+541,No Permit
+542,No Permit or License
+543,No Receipt
+544,"No Sampling Required, Requested Information (QG2)"
+545,No Shelter
+546,No Water (WNW)
+547,Noise
+548,"Noise, Barking Dog (NR5)"
+549,"Noise, Ice Cream Truck (NR4)"
+550,"Noise, Other Animals (NR6)"
+551,Noise: air condition/ventilation equipment (NV1)
+552,Noise: Alarms (NR3)
+553,"Noise: Boat(Engine,Music,Etc) (NR10)"
+554,Noise: Construction Before/After Hours (NM1)
+555,Noise: Construction Equipment (NC1)
+556,Noise: Jack Hammering (NC2)
+557,Noise: lawn care equipment (NCL)
+558,Noise: Loud Music/Daytime (Mark Date And Time) (NN1)
+559,Noise: Manufacturing Noise (NK1)
+560,Noise: Other Noise Sources (Use Comments) (NZZ)
+561,Noise: Private Carting Noise (NQ1)
+562,Non-Chronic
+563,Non-Food Vendor
+564,Not Certified
+565,Nuisance/Truant
+566,NYPD
+567,Obstructing Public Use
+568,Odor
+569,Odor In Sewer/Catch Basin (ICB)
+570,Office Supply or Stationery Store
+571,Oil Spill Into Basin/Sewer - Large (IABL)
+572,Oil Spill Into Basin/Sewer - Small (IABS)
+573,"Oil Spill On Street, Large (HQL)"
+574,"Oil Spill On Street, Small (HQS)"
+575,"Oil, Grease In Water (QD1)"
+576,On Messenger
+577,On Structure
+578,One Way
+579,Online or Mail Order
+580,Opossum
+581,Original Labels or Packaging Not Kept
+582,Other
+583,Other (complaint details)
+584,Other (Explain Below)
+585,Other - Explain Below
+586,Other Animal
+587,Other Damage to Sign
+588,Other Request for Enforcement
+589,Other School Condition
+590,Other Store (Non-Food)
+591,Other Water Problem (Use Comments) (QZZ)
+592,Other/Unknown
+593,Out of Order
+594,OUTLET COVER
+595,OUTLET/SWITCH
+596,Overflowing
+597,Overflowing dumpster
+598,Overnight Commercial Storage
+599,Owner/Broker/Agent Complaint
+600,Painted Line/Marking
+601,Paper License Plates
+602,Parking Card Stuck in Meter
+603,Parking Corral Not Maintained
+604,Parking Permit Improper Use
+605,Partial Access
+606,PAVEMENT
+607,Pawnbroker
+608,Ped Flasher
+609,Ped Lamp
+610,Ped Lens
+611,Ped Multiple Lamps
+612,Ped Visor
+613,Pedestrian Feature
+614,Pedestrian Ramp Defective
+615,Pedestrian Sign
+616,Pedestrian Signal
+617,Pedicab
+618,Permit/License/Certificate
+619,Pest Control Services
+620,Pesticide
+621,PESTS
+622,Pet Store
+623,Pet/Animal
+624,Phone Blocking Sidewalk
+625,Photocell (PEC) Missing
+626,Pigeon Odor
+627,Pigeon Waste
+628,Planted Less Than 2 Years Ago
+629,Planted More Than 2 Years Ago
+630,Plants- Noise Related Problems (PN1)
+631,Plants- Odor Related Problems (PO1)
+632,Plate Condition - Anti-Skid
+633,Plate Condition - DEP
+634,Plate Condition - Noisy
+635,Plate Condition - Open
+636,Plate Condition - Shifted
+637,Playing in Unsuitable Place
+638,Plumbing
+639,Plumbing Problem
+640,Plumbing Work - Illegal/No Permit/Standpipe/Sprinkler
+641,Plumbing Work - Unlicensed/Illegal/Improper Work In Progress
+642,Plumbing-Defective/Leaking/Not Maintained
+643,Poison Ivy
+644,Police Report Not Requested
+645,Police Report Requested
+646,Ponding
+647,Pool or Billiard Room
+648,PORCH/BALCONY
+649,Possible Water Main Break (Use Comments) (WA1)
+650,Post
+651,Posted Notice Or Order Removed/Tampered With
+652,Posted Parking Sign Violation
+653,Poster or Sign
+654,Pothole
+655,Pothole - Highway
+656,Pothole - Tunnel
+657,POWER OUTAGE
+658,Pregnancy Services Center
+659,Printing Services
+660,Privately Owned Public Space/Non-Compliance
+661,Process Server
+662,Product Concerns
+663,Public Complaint - Comm Location
+664,Puddle in Ground
+665,Puddle on Driveway
+666,Puddle on Roof
+667,Puddle on Sidewalk
+668,Push Button
+669,Raccoon
+670,RADIATOR
+671,RAIN GARDEN DEBRIS (GIRGD)
+672,RAIN GARDEN FLOODING (SRGFLD)
+673,RAIN GARDEN PLANTING (GIRGP)
+674,RAIN GARDEN STRUCTURE (GIRGS)
+675,Rat or Mouse
+676,Rat Sighting
+677,Recreation Center
+678,Recycling - Metal/Glass/Rigid Plastic
+679,Recycling - Paper
+680,Recycling - Paper/Metal/Glass/Rigid Plastic
+681,Recycling Posters Not Posted
+682,Red Lt Camera Feed
+683,Reflector/Louvre
+684,REFRIGERATOR
+685,Refrigerator or Freezer Door Attached
+686,Relocation of Parking Meter
+687,Removal Request
+688,Remove Debris
+689,Remove Stump
+690,Removing Flowers/Plants
+691,Removing Wildlife
+692,Replacement Basket
+693,Residential Rental Agency
+694,Restaurant
+695,Restaurant Status
+696,Restroom Non-Complaince With Local Law 79/16
+697,Restrooms
+698,Roadway
+699,Rodent Sighting
+700,Rodents/Insects/Garbage
+701,Rodents/Mice
+702,ROOF DOOR/HATCH
+703,Roof Gutters
+704,ROOFING
+705,Rooftank Leak Or Overflow (CKO)
+706,Rooster
+707,Roots Damaged
+708,Rough Pavement
+709,"Rough, Pitted or Cracked Roads"
+710,Safety
+711,Safety Equipment/Signs
+712,Safety Inspection-Retaining Walls (May 2005)
+713,Safety Netting/Guard Rails - Damaged/Inadequate/None (6 Stories/75 Feet Or Less)
+714,Safety Netting/Guard Rails - Damaged/Inadequate/None (Over 6 Stories/75 Feet)
+715,Sales to Minors Under 21
+716,Scale Dealer or Repairer
+717,School Crossing
+718,Scrap Metal Processor
+719,SEWAGE
+720,Sewage Leak
+721,Sewage Odor
+722,SEWER
+723,Sewer Backup (Use Comments) (SA)
+724,Sewer Odor (SA2)
+725,Sewer or Drain
+726,Shipping Company
+727,Shisha Sold to Minor
+728,Sidewalk
+729,Sidewalk Collapsed
+730,Sidewalk Display
+731,Sidewalk Grating - Defective
+732,Sidewalk Grating - Missing
+733,Sidewalk Pull Box Co
+734,Sidewalk Shed/Pipe Scafford - Inadequate Defective/None
+735,Sidewalk Staircase
+736,Sidewalk Violation
+737,Sidewalk Zone Blocked
+738,Sign
+739,Sign - In Danger Of Falling
+740,Sign Blocked by Tree
+741,Sign Defect - Garage
+742,Sign Defect - Lot
+743,Sign Inadequate
+744,Sign Missing or Defective
+745,Sign/Awning/Marquee - Illegal/No Permit
+746,SIGNAGE MISSING
+747,Signs of Rodents
+748,Site Conditions Endangering Workers
+749,Site Setup Condition
+750,SKYLIGHT
+751,SLOW LEAK
+752,Small uncovered dumpster
+753,SMOKE DETECTOR
+754,Smoke/Odor
+755,Smoking
+756,Smoking Ban - Smoking on Construction Site
+757,"Smoking Signs - ""No Smoking"" Signs Not Observed on Construction Site"
+758,"Smoking, Cigar, or Vape Store"
+759,Snake
+760,Snow on Overpass
+761,Snow or Ice
+762,Snow Removal
+763,Snow Removal Requested
+764,Snow Tracking
+765,Snow/Ice
+766,Social Distancing
+767,Sodium Warning
+768,Special Operations Compliance Inspection
+769,Speed Board Sign
+770,Speed Limit
+771,Spilled Garbage
+772,Sports Equipment
+773,SPRINKLER
+774,Sprinkler System - Inadequate
+775,Squirrel
+776,SRO - Illegal Work/No Permit/Change In Occupancy/Use
+777,St Name - Attached to Pole
+778,St Name - Over Intersection
+779,STAIRS
+780,STEAM PIPE/RISER
+781,Sticker or Decal
+782,Stoop Line Stand
+783,Stop
+784,Storage Area Not Provided
+785,Storage Warehouse
+786,Street Cleaning - ASP
+787,Street Con Game
+788,Street Fair Vendor
+789,Street Flooding (SJ)
+790,Street Light Cycling
+791,Street Light Dayburning
+792,Street Light Feed
+793,Street Light Lamp Dim
+794,Street Light Lamp Missing
+795,Street Light Out
+796,Street Not Swept
+797,Street Zone Blocked
+798,Strip Paving
+799,Structural Stability Impacted - New Building Under Construction
+800,Structure - Indoors
+801,Structure - Outdoors
+802,Summer Camp
+803,Sunken Pavement
+804,Supermarket or Grocery Store
+805,Support Bracket
+806,Suspended (Hanging) Scaffolds - No Pmt/Lic/Dangerous/Accident
+807,Suspicious Activity
+808,Sway Bar
+809,Swimming Pool - Unmaintained
+810,Swimming Pool Cover
+811,Syringes
+812,"Taste/Odor, Bitter/Metallic (QA3)"
+813,"Taste/Odor, Chemical (QA2)"
+814,"Taste/Odor, Chlorine (QA1)"
+815,"Taste/Odor, Musty/Stale (QA4)"
+816,"Taste/Odor, Sewer (QA5)"
+817,Tattoo Artist Unlicensed
+818,Tax Preparation Services
+819,Telco Connection Blk
+820,Temporary
+821,Tenant Refusal
+822,Tenant Safety - Failure To Post/Distribute
+823,Tenant Safety Inspection
+824,Third-Party Food Delivery Service
+825,Ticket Scalping
+826,Ticket Seller
+827,Tie Rods
+828,Time Clock Maladjusted
+829,Time Switch
+830,Timer Defect - Fast/Fail
+831,Tires
+832,Tobacco Sales
+833,TOILET
+834,Toilet Facility
+835,Too Close to a House of Worship
+836,Too Close to a School
+837,Too Few on Duty
+838,Tortured
+839,Touchscreen/Button Not Working
+840,Tour Bus
+841,Tour Guide
+842,Tow Truck Company
+843,Toxic Chemical/Material
+844,Traffic Camera
+845,Traffic Sign or Signal Blocked
+846,Traffic Signal Light
+847,Transducer-Loop
+848,Trash
+849,Trash and Bulky Trash
+850,Trash Not Separated from Recycling
+851,Trash or Recycling
+852,Trash or Recycling Not Secure
+853,Travel Agency
+854,Tree Alive - in Poor Condition
+855,Tree Leaning/Uprooted
+856,Tree Trunk Split
+857,Trees and Sidewalks Program
+858,Trespassing
+859,Truck Route Violation
+860,Trunk Damaged
+861,Turn Signal
+862,Turtle Under 4 inches Long
+863,Unauthorized Bus Layover
+864,Unauthorized Climbing
+865,Unauthorized Film Shoot
+866,Unauthorized Posting of Signs
+867,Unauthorized Tree Pruning
+868,Unauthorized Tree Removal
+869,Unclean Condition
+870,Underage - Licensed Est
+871,Underground
+872,unknown odor/taste in drinking water (QA6)
+873,Unleashed Dog in Public
+874,Unlicensed
+875,Unlicensed Day Care
+876,Unlicensed Vendors
+877,Unlicensed/Illegal/Improper Work In Progress
+878,"Unsafe Chemical, Abandoned (HC2)"
+879,"Unsafe Chemical, Storage (HC1)"
+880,Unsafe Driving
+881,Unsafe Mold Cleanup
+882,Unsafe Use of Playground
+883,Unsafe Worksite
+884,Unsanitary Condition
+885,Unsanitary Conditions
+886,Unsecured Facility
+887,Unspecified
+888,Use Indoor
+889,Use of Newly Seeded Lawn
+890,Use Outside
+891,Used Car Dealer
+892,Used Goods Dealer
+893,Used Gun Dealer
+894,User Unlicensed
+895,Veh Sgnl Mult Lamps
+896,Veh Signal Head
+897,Veh Signal Lamp
+898,Veh Signal Lens
+899,Veh Signal Sec Door
+900,Veh Signal Visor
+901,Vehicle
+902,Vehicle Complaint
+903,Vehicle Report
+904,Vehicle Signal
+905,Vent/Exhaust - Illegal/Improper
+906,Ventilation
+907,VENTILATION SYSTEM
+908,Ver Mesage Sign RTPI
+909,WALL
+910,Wall/Retaining Wall - Bulging/Cracked
+911,Warning Buzzer
+912,Warning Signal
+913,Warning Signal Lamp
+914,Waste Disposal
+915,Waste Left in Front of Other Residence
+916,Waste Left in Front of Residence
+917,Waste Not Separated
+918,Waste Set Out Too Early or Too Late
+919,Wastewater Into Catch Basin (IEB)
+920,"Wasting Faucets,Sinks,Flushometer,Urinal,Etc. - Other (CWO)"
+921,"Wasting Faucets,Sinks,Flushometer,Urinal,Etc. - Private Residence (CWR)"
+922,Water
+923,Water Meter Broken/Leaking - Other (CMO)
+924,Water Meter Broken/Leaking - Private Residence (CMR)
+925,Water Meter Stolen/Missing - Other (CLO)
+926,Water Meter Stolen/Missing - Private Residence (CLR)
+927,WATER SUPPLY
+928,Waterway-Color (IHD)
+929,Waterway-Sewage (IHA)
+930,Wear & Tear
+931,Weather Head
+932,Weeds or Grass
+933,Wholesale Food Market
+934,WiFi/Internet Not Working/Slow
+935,Wildlife Sighting
+936,WINDOW FRAME
+937,WINDOW GUARD BROKEN/MISSING
+938,WINDOW PANE
+939,WINDOW/FRAME
+940,Wireless
+941,Wireless Antenna
+942,WIRING
+943,With License Plate
+944,Wood Pole Damaged
+945,Wood Pole Equipment
+946,Wood Pole Knocked Down
+947,Wood Pole Leaning
+948,Work Without A Permit - Occupied Multiple Dwelling
+949,Working Contrary To Stop Work Order
+950,Workplace - 10 or Less Staff
+951,Workplace Policy Not Provided or Inadequate
+952,Yield
+953,Zoning - Non-Conforming/Illegal Vehicle Storage
