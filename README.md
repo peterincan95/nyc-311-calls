@@ -2,6 +2,12 @@
 
 Explore a year of New York City 311 calls, from July 2025 through June 2026. The left panel plots calls by location. The right panel plots them by longitude and date. Filter by category, problem or problem detail, by borough or neighborhood, and by date. Both dropdowns have a search box.
 
+## Branches and releases
+
+- `dev` is the default branch. Feature branches start from `dev` and merge back into it by pull request.
+- `main` is production. Every push to `main` builds the app and deploys it to GitHub Pages (see `.github/workflows/deploy-pages.yml`).
+- To release, open a pull request from `dev` into `main` and merge it.
+
 ## Run the app
 
 Requires Node 20 or later. The processed data is in the repo, so this is all you need:
