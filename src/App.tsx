@@ -21,7 +21,6 @@ import {
 } from "./selection";
 import { Timeline, type DayRange } from "./Timeline";
 
-const DEFAULT_SUBJECT = "Heat/Hot Water";
 const LONGITUDE_TICKS = [-74.2, -74.1, -74, -73.9, -73.8];
 const ANNOUNCE_DELAY_MS = 600;
 
@@ -75,11 +74,7 @@ function Explorer({ data }: { data: CallData }) {
 
   const complaintMenu = useMemo(() => buildComplaintMenu(meta), [meta]);
   const placeMenu = useMemo(() => buildPlaceMenu(meta), [meta]);
-  const [filter, setFilter] = useState<Filter>(() => {
-    const complaints = complaintMenu.flatMap(({ children }) => children);
-    const complaint = complaints.find(({ name }) => name === DEFAULT_SUBJECT) ?? complaintMenu[0]!;
-    return complaint.value!;
-  });
+  const [filter, setFilter] = useState<Filter>(complaintMenu[0]!.value!);
   const [place, setPlace] = useState<Place>(placeMenu[0]!.value!);
   const [range, setRange] = useState<DayRange>(fullRange);
   const [area, setArea] = useState<Area>(WHOLE_CITY);
