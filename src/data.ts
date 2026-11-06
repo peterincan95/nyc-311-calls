@@ -1,5 +1,9 @@
 export const BYTES_PER_CALL = 8;
 
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "July", "Aug", "Sept", "Oct", "Nov", "Dec"];
+
+export const monthName = (month: number) => MONTH_NAMES[month - 1]!;
+
 export interface Subject {
   id: number;
   name: string;

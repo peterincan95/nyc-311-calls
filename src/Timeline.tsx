@@ -1,5 +1,5 @@
-import { useMemo, useRef, type KeyboardEvent, type PointerEvent } from "react";
-import type { Month } from "./data";
+import { useMemo, useRef, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
+import { monthName, type Month } from "./data";
 
 /** Indexes into the day list. The range covers `from` up to, but not including, `to`. */
 export type DayRange = [from: number, to: number];
@@ -27,6 +27,7 @@ interface TimelineProps {
   isFiltered: boolean;
   formatDay: (t: number) => string;
   onChange: (range: DayRange) => void;
+  startHandle: RefObject<HTMLDivElement | null>;
 }
 
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
@@ -60,12 +61,14 @@ export function Timeline({
   isFiltered,
   formatDay,
   onChange,
+  startHandle,
 }: TimelineProps) {
   const track = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
   const lastDay = days.length - 1;
   const [from, to] = range;
   const percent = (t: number) => `${(t / span) * 100}%`;
+  const bandMiddle = ((days[from]! + days[to]!) / 2 / span) * 100;
 
   const dayTicks = useMemo(() => dayTicksPath(days, months, span), [days, months, span]);
   const chart = useMemo(
@@ -119,7 +122,8 @@ export function Timeline({
 
   const handle = (kind: "from" | "to", day: number, label: string, valueDay: number) => (
     <div
-      className={`handle handle-${kind}`}
+      className="handle"
+      ref={kind === "from" ? startHandle : undefined}
       style={{ left: percent(days[day]!) }}
       role="slider"
       tabIndex={0}
@@ -138,6 +142,14 @@ export function Timeline({
 
   return (
     <div className="timeline">
+      <div className="range-row" aria-hidden="true">
+        <span
+          className="range-label"
+          style={{ left: `clamp(112px, ${bandMiddle}%, calc(100% - 112px))` }}
+        >
+          {formatDay(days[from]!)} – {formatDay(days[to - 1]!)}
+        </span>
+      </div>
       <div className="track" ref={track}>
         <div
           className={isFiltered ? "band band-filtered" : "band"}
@@ -162,6 +174,16 @@ export function Timeline({
         ))}
         {handle("from", from, "Start date", from)}
         {handle("to", to, "End date", to - 1)}
+      </div>
+      <div className="month-row" aria-hidden="true">
+        {months.slice(0, -1).map(({ t, month }, index) => (
+          <span
+            key={t}
+            style={{ left: percent(t), width: percent(months[index + 1]!.t - t) }}
+          >
+            {monthName(month)}
+          </span>
+        ))}
       </div>
     </div>
   );

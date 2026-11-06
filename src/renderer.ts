@@ -41,11 +41,12 @@ interface Targets {
 
 const MAX_PIXEL_RATIO = 2;
 const MAP_FILL = 0.94;
-const SCATTER_FILL_X = 0.96;
+export const SCATTER_FILL_X = 0.96;
 
-// Brightness of one call, reduced for large selections so dense views keep their detail.
+// Brightness of one call. It falls once points would cover a plot more than this
+// many times over, so dense views keep their detail and look alike at any size.
 const POINT_WEIGHT = 0.6;
-const FULL_WEIGHT_CALLS = 300_000;
+const FULL_WEIGHT_COVERAGE = 1.1;
 const WEIGHT_FALLOFF = 0.95;
 const OUTSIDE_RANGE_WEIGHT = 0.16;
 const NEAR_GLOW = 0.3;
@@ -353,21 +354,22 @@ export class CallRenderer {
     gl.blendFunc(gl.ONE, gl.ONE);
     gl.enable(gl.SCISSOR_TEST);
     gl.uniform1f(points.uniforms.u_timeSpan!, this.meta.tEnd - this.meta.tStart);
-    gl.uniform1f(points.uniforms.u_pointSize!, Math.max(1, Math.round(this.pixelRatio)));
+    const pointSize = Math.max(1, Math.round(this.pixelRatio));
+    gl.uniform1f(points.uniforms.u_pointSize!, pointSize);
 
-    const weight =
-      POINT_WEIGHT *
-      Math.min(1, (FULL_WEIGHT_CALLS / Math.max(1, selection.totalCount)) ** WEIGHT_FALLOFF);
+    const mapFill = this.mapFill(map);
+    const mapWeight = this.pointWeight(selection, pointSize, map, mapFill[0] * mapFill[1]);
+    const scatterWeight = this.pointWeight(selection, pointSize, scatter, SCATTER_FILL_X);
 
     this.setPanel(map);
-    this.setProjection(this.mapFill(map), 0);
-    this.drawSlices(selection.inside, weight);
+    this.setProjection(mapFill, 0);
+    this.drawSlices(selection.inside, mapWeight);
 
     this.setPanel(scatter);
     // A negative fill runs time downward, with the oldest calls at the top.
     this.setProjection([SCATTER_FILL_X, -1], 1);
-    this.drawSlices(selection.inside, weight);
-    this.drawSlices(selection.outside, weight * OUTSIDE_RANGE_WEIGHT);
+    this.drawSlices(selection.inside, scatterWeight);
+    this.drawSlices(selection.outside, scatterWeight * OUTSIDE_RANGE_WEIGHT);
 
     gl.disable(gl.BLEND);
     gl.disable(gl.SCISSOR_TEST);
@@ -382,6 +384,13 @@ export class CallRenderer {
     const height = Math.round(rect.height * pixelRatio);
     gl.viewport(x, y, width, height);
     gl.scissor(x, y, width, height);
+  }
+
+  /** Uses the whole year's calls, so brightness holds steady while the range is dragged. */
+  private pointWeight(selection: Selection, pointSize: number, rect: Rect, filled: number) {
+    const plotPixels = rect.width * rect.height * this.pixelRatio ** 2 * filled;
+    const coverage = (selection.totalCount * pointSize ** 2) / plotPixels;
+    return POINT_WEIGHT * Math.min(1, (FULL_WEIGHT_COVERAGE / coverage) ** WEIGHT_FALLOFF);
   }
 
   /** The share of the map panel the city fills, keeping it undistorted. */
