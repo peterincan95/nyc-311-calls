@@ -1,4 +1,4 @@
-import { BYTES_PER_CALL, type Meta } from "./data";
+import { BYTES_PER_CALL, type CallData } from "./data";
 import type { Selection, Slice } from "./selection";
 
 export interface Rect {
@@ -55,15 +55,23 @@ const FAR_GLOW = 0.75;
 const POINT_VERTEX = `#version 300 es
 layout(location = 0) in vec2 a_position;
 layout(location = 1) in float a_time;
+layout(location = 2) in uint a_tags;
 uniform vec2 u_scale;
 uniform vec2 u_offset;
 uniform float u_timeAsY;
 uniform float u_timeSpan;
 uniform float u_pointSize;
+uniform uint u_tagMask;
+uniform uint u_tagMatch;
 void main() {
+  gl_PointSize = u_pointSize;
+  if ((a_tags & u_tagMask) != u_tagMatch) {
+    // Outside the clip volume, so the point is never drawn.
+    gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
+    return;
+  }
   vec2 point = vec2(a_position.x, mix(a_position.y, a_time / u_timeSpan, u_timeAsY));
   gl_Position = vec4(point * u_scale + u_offset, 0.0, 1.0);
-  gl_PointSize = u_pointSize;
 }`;
 
 const POINT_FRAGMENT = `#version 300 es
@@ -202,8 +210,7 @@ export class CallRenderer {
 
   constructor(
     private canvas: HTMLCanvasElement,
-    private buffer: ArrayBuffer,
-    private meta: Meta,
+    private data: CallData,
   ) {
     const gl = canvas.getContext("webgl2", {
       alpha: false,
@@ -277,11 +284,15 @@ export class CallRenderer {
     const pointsVao = gl.createVertexArray()!;
     gl.bindVertexArray(pointsVao);
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ARRAY_BUFFER, this.buffer, gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(this.data.buffer), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.UNSIGNED_SHORT, true, BYTES_PER_CALL, 0);
     gl.enableVertexAttribArray(1);
     gl.vertexAttribPointer(1, 1, gl.UNSIGNED_INT, false, BYTES_PER_CALL, 4);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, this.data.tags, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(2);
+    gl.vertexAttribIPointer(2, 1, gl.UNSIGNED_INT, 0, 0);
 
     this.resources = {
       points: createProgram(gl, POINT_VERTEX, POINT_FRAGMENT, [
@@ -291,6 +302,8 @@ export class CallRenderer {
         "u_timeSpan",
         "u_pointSize",
         "u_weight",
+        "u_tagMask",
+        "u_tagMatch",
       ]),
       downsample: createProgram(gl, FULLSCREEN_VERTEX, DOWNSAMPLE_FRAGMENT, [
         "u_source",
@@ -353,7 +366,10 @@ export class CallRenderer {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE);
     gl.enable(gl.SCISSOR_TEST);
-    gl.uniform1f(points.uniforms.u_timeSpan!, this.meta.tEnd - this.meta.tStart);
+    const { meta } = this.data;
+    gl.uniform1f(points.uniforms.u_timeSpan!, meta.tEnd - meta.tStart);
+    gl.uniform1ui(points.uniforms.u_tagMask!, selection.mask);
+    gl.uniform1ui(points.uniforms.u_tagMatch!, selection.match);
     const pointSize = Math.max(1, Math.round(this.pixelRatio));
     gl.uniform1f(points.uniforms.u_pointSize!, pointSize);
 
@@ -395,7 +411,7 @@ export class CallRenderer {
 
   /** The share of the map panel the city fills, keeping it undistorted. */
   private mapFill(rect: Rect): [number, number] {
-    const { lonMin, lonMax, latMin, latMax } = this.meta.bounds;
+    const { lonMin, lonMax, latMin, latMax } = this.data.meta.bounds;
     const middleLatitude = ((latMin + latMax) / 2) * (Math.PI / 180);
     const cityAspect = ((lonMax - lonMin) * Math.cos(middleLatitude)) / (latMax - latMin);
     const panelAspect = rect.width / rect.height;

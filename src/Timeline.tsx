@@ -12,6 +12,10 @@ const VIEW_HEIGHT = 100;
 const CHART_HEIGHT = 90;
 const DAY_TICK_HEIGHT = 9;
 
+const DOUBLE_PRESS_MS = 350;
+/** At or below this many days the handles sit outside the band, so they don't overlap. */
+const NARROW_RANGE_DAYS = 14;
+
 interface Drag {
   kind: DragKind;
   startDay: number;
@@ -27,6 +31,7 @@ interface TimelineProps {
   isFiltered: boolean;
   formatDay: (t: number) => string;
   onChange: (range: DayRange) => void;
+  onReset: () => void;
   startHandle: RefObject<HTMLDivElement | null>;
 }
 
@@ -38,6 +43,14 @@ function dayTicksPath(days: number[], months: Month[], span: number) {
     .filter((day) => !monthStarts.has(day))
     .map((day) => `M${(day / span) * VIEW_WIDTH} 0V${DAY_TICK_HEIGHT}`)
     .join("");
+}
+
+/** The days from `from` to the same date next month, or that month's end if it's shorter. */
+function daysInMonthFrom(from: number, monthStarts: number[]) {
+  const month = monthStarts.filter((start) => start <= from).length - 1;
+  const next = monthStarts[month + 1]!;
+  const nextLength = (monthStarts[month + 2] ?? Infinity) - next;
+  return next + Math.min(from - monthStarts[month]!, nextLength) - from;
 }
 
 /** Plots each day's count at the middle of that day. */
@@ -61,10 +74,12 @@ export function Timeline({
   isFiltered,
   formatDay,
   onChange,
+  onReset,
   startHandle,
 }: TimelineProps) {
   const track = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
+  const lastPress = useRef(0);
   const lastDay = days.length - 1;
   const [from, to] = range;
   const percent = (t: number) => `${(t / span) * 100}%`;
@@ -75,6 +90,19 @@ export function Timeline({
     () => countChartPaths(days, dailyCounts, span),
     [days, dailyCounts, span],
   );
+
+  const monthStarts = useMemo(() => months.map(({ t }) => days.indexOf(t)), [days, months]);
+  const presets = [
+    { label: "1 Month", length: daysInMonthFrom(from, monthStarts) },
+    { label: "1 Week", length: 7 },
+    { label: "1 Day", length: 1 },
+  ];
+
+  /** Keeps the start date, moving it back only if the range would run past the last day. */
+  const applyPreset = (length: number) => {
+    const end = Math.min(from + length, lastDay);
+    onChange([Math.max(end - length, 0), end]);
+  };
 
   const nearestDay = (clientX: number) => {
     const { left, width } = track.current!.getBoundingClientRect();
@@ -96,6 +124,14 @@ export function Timeline({
 
   const startDrag = (kind: DragKind) => (event: PointerEvent<HTMLElement>) => {
     event.preventDefault();
+    // Counted from presses, not dblclick, so it also works on touch screens.
+    const isDoublePress = event.timeStamp - lastPress.current < DOUBLE_PRESS_MS;
+    lastPress.current = event.timeStamp;
+    if (isDoublePress && isFiltered) {
+      lastPress.current = 0;
+      onReset();
+      return;
+    }
     event.currentTarget.focus();
     event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = { kind, startDay: nearestDay(event.clientX), startRange: range };
@@ -122,7 +158,7 @@ export function Timeline({
 
   const handle = (kind: "from" | "to", day: number, label: string, valueDay: number) => (
     <div
-      className="handle"
+      className={`handle handle-${kind}`}
       ref={kind === "from" ? startHandle : undefined}
       style={{ left: percent(days[day]!) }}
       role="slider"
@@ -142,6 +178,32 @@ export function Timeline({
 
   return (
     <div className="timeline">
+      <div className="range-pills" role="group" aria-label="Date range">
+        {presets.map(({ label, length }) => (
+          <button
+            type="button"
+            className="pill"
+            key={label}
+            aria-pressed={to - from === length}
+            onClick={() => applyPreset(length)}
+          >
+            {label}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="pill pill-icon"
+          aria-label="Reset to the full year"
+          title="Reset to the full year"
+          disabled={!isFiltered}
+          onClick={onReset}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M3.5 6.5a5 5 0 1 1-.2 3.2" />
+            <path d="M3 2.5v4h4" />
+          </svg>
+        </button>
+      </div>
       <div className="range-row" aria-hidden="true">
         <span
           className="range-label"
@@ -150,7 +212,7 @@ export function Timeline({
           {formatDay(days[from]!)} – {formatDay(days[to - 1]!)}
         </span>
       </div>
-      <div className="track" ref={track}>
+      <div className={to - from <= NARROW_RANGE_DAYS ? "track narrow" : "track"} ref={track}>
         <div
           className={isFiltered ? "band band-filtered" : "band"}
           style={{ left: percent(days[from]!), right: `${100 - (days[to]! / span) * 100}%` }}

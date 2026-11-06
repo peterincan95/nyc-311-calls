@@ -1,6 +1,6 @@
 # NYC 311 Calls
 
-Explore a year of New York City 311 calls, from July 2025 through June 2026. The left panel plots calls by location. The right panel plots them by longitude and date. Filter by problem with the dropdown, and by date with the timeline.
+Explore a year of New York City 311 calls, from July 2025 through June 2026. The left panel plots calls by location. The right panel plots them by longitude and date. Filter by category, problem or problem detail, by borough or neighborhood, and by date. Both dropdowns have a search box.
 
 ## Run the app
 
@@ -13,7 +13,7 @@ npm run dev
 
 ## How it works
 
-- **Data:** `public/data/calls.bin` stores 8 bytes per call. Calls are sorted by problem, then time, so any filter selects contiguous rows and needs no reprocessing. `public/data/meta.json` describes where each problem starts.
+- **Data:** `public/data/calls.bin` stores 8 bytes per call. Calls are sorted by problem, then time, so problem and date filters select contiguous rows. `public/data/tags.bin` stores each call's detail, neighborhood and borough in 4 bytes, and the GPU uses them to hide calls that don't match. `public/data/meta.json` describes where each problem starts and which problems are in each category. Categories are defined in `scripts/problem_groups.py`.
 - **Rendering:** a small WebGL2 renderer in `src/renderer.ts` adds every point into a density buffer, then turns density into light with a two-size glow. Both panels share one canvas and one copy of the data.
 - **Missing locations:** calls with no coordinates can't be plotted, so they are left out of the binary file. The app reports how many there are for the current problem.
 - **Dates:** times are New York local time, and days and months begin at New York midnight.
