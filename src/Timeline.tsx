@@ -1,5 +1,8 @@
 import { useMemo, useRef, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 import { monthName, type Month } from "./data";
+import { COLOR_STOPS } from "./renderer";
+
+const chartColor = COLOR_STOPS[COLOR_STOPS.length - 2];
 
 /** Indexes into the day list. The range covers `from` up to, but not including, `to`. */
 export type DayRange = [from: number, to: number];
@@ -13,8 +16,6 @@ const CHART_HEIGHT = 90;
 const DAY_TICK_HEIGHT = 9;
 
 const DOUBLE_PRESS_MS = 350;
-/** At or below this many days the handles sit outside the band, so they don't overlap. */
-const NARROW_RANGE_DAYS = 14;
 
 interface Drag {
   kind: DragKind;
@@ -212,7 +213,7 @@ export function Timeline({
           {formatDay(days[from]!)} – {formatDay(days[to - 1]!)}
         </span>
       </div>
-      <div className={to - from <= NARROW_RANGE_DAYS ? "track narrow" : "track"} ref={track}>
+      <div className="track" ref={track}>
         <div
           className={isFiltered ? "band band-filtered" : "band"}
           style={{ left: percent(days[from]!), right: `${100 - (days[to]! / span) * 100}%` }}
@@ -227,8 +228,12 @@ export function Timeline({
           preserveAspectRatio="none"
           aria-hidden="true"
         >
-          <path className="chart-area" d={chart.area} />
-          <path className="chart-line" d={chart.line} />
+          <path className="chart-area" d={chart.area} style={{ fill: chartColor }} />
+          <path
+            className="chart-line"
+            d={chart.line}
+            style={{ stroke: chartColor }}
+          />
           <path className="day-ticks" d={dayTicks} />
         </svg>
         {months.slice(0, -1).map(({ t }) => (

@@ -48,12 +48,28 @@ export interface Meta {
   groups: SubjectGroup[];
   boroughs: NamedId[];
   neighborhoods: NamedId[];
-  /** Calls with no coordinates, as [subject id, tag, count]. */
-  missingCalls: [number, number, number][];
+}
+
+export interface BoundaryLabel {
+  name: string;
+  x: number;
+  y: number;
+  /** Width of a square the same area as this place, as a share of the city. */
+  size: number;
+  residential: boolean;
+}
+
+/** Outlines on the same grid as the calls. Each ring is a flat [x, y, x, y, ...] list. */
+export interface Boundaries {
+  boroughs: number[][];
+  neighborhoods: number[][];
+  /** Largest first. */
+  labels: BoundaryLabel[];
 }
 
 export interface CallData {
   meta: Meta;
+  boundaries: Boundaries;
   buffer: ArrayBufferLike;
   /** Every call's record as uint32 pairs: [packed x and y, seconds since tStart]. */
   words: Uint32Array;
@@ -97,10 +113,15 @@ export async function loadCalls(onProgress: (fraction: number) => void): Promise
     received += count;
     onProgress(received / (calls.length + tags.length));
   };
-  await Promise.all([readInto("calls.bin", calls, onBytes), readInto("tags.bin", tags, onBytes)]);
+  const [boundaries] = await Promise.all([
+    fetchOk("boundaries.json").then((response) => response.json() as Promise<Boundaries>),
+    readInto("calls.bin", calls, onBytes),
+    readInto("tags.bin", tags, onBytes),
+  ]);
 
   return {
     meta,
+    boundaries,
     buffer: calls.buffer,
     words: new Uint32Array(calls.buffer),
     tags: new Uint32Array(tags.buffer),

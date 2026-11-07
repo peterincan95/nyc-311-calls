@@ -1,28 +1,32 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { BoxOutline, gridToShare, shareToGrid, useBoxDraw, type Box } from "./box";
-import { loadCalls, monthName, type CallData, type Month } from "./data";
+import { BoxOutline, clampShare, useBoxDraw, type Box } from "./box";
+import { loadCalls, type CallData } from "./data";
 import { ColumnMenu } from "./ColumnMenu";
 import {
   buildComplaintMenu,
   buildPlaceMenu,
   combineTags,
-  countMissing,
   type Filter,
   type Place,
 } from "./filters";
-import { CallRenderer, mapFill, SCATTER_FILL_X, type Rect } from "./renderer";
+import { MapView } from "./mapView";
+import { HOME, isHome, PanZoom } from "./panZoom";
+import { CallRenderer, SCATTER_FILL_X, type Rect, type ScatterAxis } from "./renderer";
+import { dateTicks, hourTicks, longitudeTicks } from "./scatterAxes";
 import {
   countCallsByDay,
   countComplaints,
   countPlaces,
+  GRID_MAX,
+  SECONDS_PER_DAY,
   selectCalls,
   WHOLE_CITY,
   type Area,
 } from "./selection";
 import { Timeline, type DayRange } from "./Timeline";
 
-const LONGITUDE_TICKS = [-74.2, -74.1, -74, -73.9, -73.8];
 const ANNOUNCE_DELAY_MS = 600;
+const SCATTER_FILL = [SCATTER_FILL_X, 1] as const;
 
 const dateFormat = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/New_York",
@@ -51,11 +55,6 @@ export function App() {
   return <Explorer data={data} />;
 }
 
-function monthLabel({ year, month }: Month, index: number) {
-  const name = monthName(month);
-  return index === 0 || month === 1 ? `${name} ${year}` : name;
-}
-
 /** Puts off an expensive count until something asks for it, then keeps the answer. */
 function lazyCounts<T>(count: () => (value: T) => number) {
   let counts: ((value: T) => number) | null = null;
@@ -80,16 +79,24 @@ function Explorer({ data }: { data: CallData }) {
   const [area, setArea] = useState<Area>(WHOLE_CITY);
   // A box on the scatterplot also sets the dates, so clearing it should too.
   const [boxSetDates, setBoxSetDates] = useState(false);
-  const [fill, setFill] = useState<[number, number]>([1, 1]);
+  const [isDrawingBox, setIsDrawingBox] = useState(false);
+  const [isMapMoved, setIsMapMoved] = useState(false);
+  const [showLabels, setShowLabels] = useState(true);
+  const [scatterAxis, setScatterAxis] = useState<ScatterAxis>("longitude");
+  const [scatterCamera, setScatterCamera] = useState(HOME);
+  const [scatterSize, setScatterSize] = useState({ width: 1, height: 1 });
   const [announcement, setAnnouncement] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const canvas = useRef<HTMLCanvasElement>(null);
+  const mapCanvas = useRef<HTMLCanvasElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const mapPlot = useRef<HTMLDivElement>(null);
   const scatterPlot = useRef<HTMLDivElement>(null);
   const startHandle = useRef<HTMLDivElement>(null);
   const renderer = useRef<CallRenderer | null>(null);
+  const mapView = useRef<MapView | null>(null);
+  const scatterView = useRef<PanZoom | null>(null);
 
   const tFrom = meta.days[range[0]]!;
   const tTo = meta.days[range[1]]!;
@@ -97,15 +104,32 @@ function Explorer({ data }: { data: CallData }) {
 
   const hasArea = area !== WHOLE_CITY;
   const hasBox = hasArea || boxSetDates;
+  const isTimeAxis = scatterAxis === "time";
+  const axisName = isTimeAxis ? "time of day" : "longitude";
 
   const tags = useMemo(() => combineTags(filter, place), [filter, place]);
+  const cityDailyCounts = useMemo(
+    () => countCallsByDay(data, filter.subjects, tags, WHOLE_CITY),
+    [data, filter, tags],
+  );
   const dailyCounts = useMemo(
-    () => countCallsByDay(data, filter.subjects, tags, area),
-    [data, filter, tags, area],
+    () =>
+      area === WHOLE_CITY ? cityDailyCounts : countCallsByDay(data, filter.subjects, tags, area),
+    [data, filter, tags, area, cityDailyCounts],
   );
   const selection = useMemo(
-    () => selectCalls(data, filter.subjects, tags, area, dailyCounts, range[0], range[1]),
-    [data, filter, tags, area, dailyCounts, range],
+    () =>
+      selectCalls(
+        data,
+        filter.subjects,
+        tags,
+        area,
+        dailyCounts,
+        cityDailyCounts,
+        range[0],
+        range[1],
+      ),
+    [data, filter, tags, area, dailyCounts, cityDailyCounts, range],
   );
 
   const complaintCounts = useMemo(
@@ -132,18 +156,30 @@ function Explorer({ data }: { data: CallData }) {
       return;
     }
     renderer.current = current;
-    if (import.meta.env.DEV) Object.assign(window, { callRenderer: current });
+    const view = new MapView(
+      mapPlot.current!,
+      mapCanvas.current!,
+      current,
+      meta.bounds,
+      data.boundaries,
+      setIsMapMoved,
+    );
+    mapView.current = view;
+    const scatter = new PanZoom(scatterPlot.current!, 1, (camera) => {
+      current.setScatterCamera(camera);
+      setScatterCamera(camera);
+    });
+    scatterView.current = scatter;
+    if (import.meta.env.DEV) Object.assign(window, { callRenderer: current, mapView: view });
 
     const updateLayout = () => {
       const bounds = stage.current!.getBoundingClientRect();
       const map = relativeRect(mapPlot.current!, bounds);
-      current.setLayout(
-        bounds.width,
-        bounds.height,
-        map,
-        relativeRect(scatterPlot.current!, bounds),
-      );
-      setFill(mapFill(meta.bounds, map.width, map.height));
+      const scatterRect = relativeRect(scatterPlot.current!, bounds);
+      current.setLayout(bounds.width, bounds.height, map, scatterRect);
+      view.setLayout(map.width, map.height);
+      scatter.setLayout(scatterRect.width, scatterRect.height, SCATTER_FILL);
+      setScatterSize({ width: scatterRect.width, height: scatterRect.height });
     };
     const observer = new ResizeObserver(updateLayout);
     observer.observe(stage.current!);
@@ -151,14 +187,38 @@ function Explorer({ data }: { data: CallData }) {
 
     return () => {
       observer.disconnect();
+      view.destroy();
+      scatter.destroy();
       current.destroy();
+      mapView.current = null;
+      scatterView.current = null;
       renderer.current = null;
     };
   }, [data, meta]);
 
   useLayoutEffect(() => {
     renderer.current?.setSelection(selection);
-  }, [selection]);
+    mapView.current?.setArea(area);
+  }, [selection, area]);
+
+  useLayoutEffect(() => {
+    renderer.current?.setScatterAxis(scatterAxis);
+  }, [scatterAxis]);
+
+  useEffect(() => {
+    mapView.current?.setLabelsVisible(showLabels);
+  }, [showLabels]);
+
+  useEffect(() => {
+    mapView.current?.setPanEnabled(!isDrawingBox);
+    scatterView.current?.setPanEnabled(!isDrawingBox);
+    if (!isDrawingBox) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsDrawingBox(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isDrawingBox]);
 
   // Screen readers hear the result once the range settles, not every day of a drag.
   useEffect(() => {
@@ -166,26 +226,30 @@ function Explorer({ data }: { data: CallData }) {
     return () => clearTimeout(timer);
   }, [description]);
 
-  const drawOnMap = ({ left, right, top, bottom }: Box) => {
-    setArea({
-      west: shareToGrid(left, fill[0]),
-      east: shareToGrid(right, fill[0]),
-      south: shareToGrid(1 - bottom, fill[1]),
-      north: shareToGrid(1 - top, fill[1]),
-    });
+  const drawOnMap = (box: Box) => {
+    setArea({ ...area, ...mapView.current!.boxToArea(box) });
+    setIsDrawingBox(false);
   };
 
   const drawOnScatter = ({ left, right, top, bottom }: Box) => {
-    setArea({
-      ...area,
-      west: shareToGrid(left, SCATTER_FILL_X),
-      east: shareToGrid(right, SCATTER_FILL_X),
-    });
+    const view = scatterView.current!;
+    const from = clampShare(view.dataX(left));
+    const to = clampShare(view.dataX(right));
+    if (isTimeAxis) {
+      setArea({
+        ...area,
+        timeFrom: Math.round(from * SECONDS_PER_DAY),
+        timeTo: Math.round(to * SECONDS_PER_DAY),
+      });
+    } else {
+      setArea({ ...area, west: Math.round(from * GRID_MAX), east: Math.round(to * GRID_MAX) });
+    }
     const lastDay = meta.days.length - 1;
-    const from = meta.days.findLastIndex((t) => t <= top * span);
-    const to = meta.days.findIndex((t) => t >= bottom * span);
-    setRange([Math.min(from, lastDay - 1), Math.max(to, from + 1)]);
+    const firstDay = meta.days.findLastIndex((t) => t <= clampShare(view.dataY(top)) * span);
+    const endDay = meta.days.findIndex((t) => t >= clampShare(view.dataY(bottom)) * span);
+    setRange([Math.min(firstDay, lastDay - 1), Math.max(endDay, firstDay + 1)]);
     setBoxSetDates(true);
+    setIsDrawingBox(false);
   };
 
   const clearBox = () => {
@@ -200,8 +264,6 @@ function Explorer({ data }: { data: CallData }) {
 
   if (error) return <p className="status">{error}</p>;
 
-  // Calls with no coordinates can't be inside a box.
-  const missing = hasArea ? 0 : countMissing(meta, filter.subjects, tags);
   const peakCount = Math.max(...dailyCounts);
   const peakDay = formatDay(meta.days[dailyCounts.indexOf(peakCount)]!);
   const peakText = peakCount > 0 ? ` The busiest day was ${peakDay}.` : "";
@@ -209,36 +271,32 @@ function Explorer({ data }: { data: CallData }) {
   let emptyMessage = null;
   if (selection.totalCount === 0 && hasArea) {
     emptyMessage = "No calls like these in this box. Try a bigger box.";
-  } else if (selection.totalCount === 0 && missing > 0) {
-    emptyMessage = "None of these calls have a location, so there's nothing to plot.";
   } else if (selection.totalCount === 0) {
     emptyMessage = `No calls like these in ${place.name}. Try a wider area.`;
   } else if (selection.insideCount === 0) {
     emptyMessage = "No calls in these dates. Try a wider range.";
   }
 
-  const longitudePosition = (longitude: number) => {
-    const { lonMin, lonMax } = meta.bounds;
-    const share = (longitude - lonMin) / (lonMax - lonMin);
-    return `${50 + (share - 0.5) * SCATTER_FILL_X * 100}%`;
-  };
+  const { zoom } = scatterCamera;
+  const toPlotX = (share: number) => 0.5 + (share - scatterCamera.x) * SCATTER_FILL_X * zoom;
+  const toPlotY = (share: number) => 0.5 + (share - scatterCamera.y) * zoom;
+  const isOnPlot = (share: number) => share >= 0 && share <= 1;
+  const percent = (share: number) => `${share * 100}%`;
+
+  const dataWidth = scatterSize.width * SCATTER_FILL_X * zoom;
+  const xTicks = isTimeAxis ? hourTicks(dataWidth) : longitudeTicks(meta.bounds, dataWidth);
+  const yTicks = dateTicks(meta, scatterSize.height * zoom);
 
   const resetRange = () => {
     setRange(fullRange);
     startHandle.current?.focus();
   };
 
-  const mapBox: Box = {
-    left: gridToShare(area.west, fill[0]),
-    right: gridToShare(area.east, fill[0]),
-    top: 1 - gridToShare(area.north, fill[1]),
-    bottom: 1 - gridToShare(area.south, fill[1]),
-  };
   const scatterBox: Box = {
-    left: gridToShare(area.west, SCATTER_FILL_X),
-    right: gridToShare(area.east, SCATTER_FILL_X),
-    top: tFrom / span,
-    bottom: tTo / span,
+    left: toPlotX(isTimeAxis ? area.timeFrom / SECONDS_PER_DAY : area.west / GRID_MAX),
+    right: toPlotX(isTimeAxis ? area.timeTo / SECONDS_PER_DAY : area.east / GRID_MAX),
+    top: toPlotY(tFrom / span),
+    bottom: toPlotY(tTo / span),
   };
 
   return (
@@ -272,12 +330,6 @@ function Explorer({ data }: { data: CallData }) {
         <div className="summary">
           <p>
             <strong>{callCount}</strong> calls{hasBox && " in the box"}
-            {missing > 0 && (
-              <span className="summary-note">
-                {" "}
-                · {missing.toLocaleString("en-US")} more this year have no location
-              </span>
-            )}
           </p>
         </div>
       </header>
@@ -290,58 +342,114 @@ function Explorer({ data }: { data: CallData }) {
         <canvas className="points" ref={canvas} aria-hidden="true" />
 
         <section className="panel" aria-label="Map of calls">
+          <canvas className="map-lines" ref={mapCanvas} aria-hidden="true" />
           <div
-            className="plot"
+            className={isDrawingBox ? "plot map-plot drawing-box" : "plot map-plot"}
             ref={mapPlot}
             role="img"
             aria-label={`Map of New York City. ${description}.`}
-            {...mapDraw.handlers}
+            {...(isDrawingBox ? mapDraw.handlers : {})}
           >
-            {hasArea && <BoxOutline box={mapBox} />}
             {mapDraw.draft && <BoxOutline box={mapDraw.draft} draft />}
           </div>
           {emptyMessage && <p className="empty">{emptyMessage}</p>}
           <div className="box-bar">
-            {hasBox ? (
+            <button
+              className="pill"
+              type="button"
+              aria-pressed={isDrawingBox}
+              onClick={() => setIsDrawingBox(!isDrawingBox)}
+            >
+              Box select
+            </button>
+            <button
+              className="pill"
+              type="button"
+              aria-pressed={showLabels}
+              onClick={() => setShowLabels(!showLabels)}
+            >
+              Labels
+            </button>
+            {hasBox && (
               <button className="pill" type="button" onClick={clearBox}>
                 Clear box
               </button>
-            ) : (
-              <p>Drag on the map or chart to select an area</p>
             )}
+            {isMapMoved && (
+              <button
+                className="pill"
+                type="button"
+                onClick={() => mapView.current?.resetView()}
+              >
+                Reset view
+              </button>
+            )}
+            {isDrawingBox && <p>Drag on either plot to draw a box</p>}
           </div>
         </section>
 
-        <section className="panel scatter" aria-label="Calls by longitude and date">
+        <section className="panel scatter" aria-label={`Calls by ${axisName} and date`}>
           <div
-            className="plot"
+            className={isDrawingBox ? "plot drawing-box" : "plot"}
             ref={scatterPlot}
             role="img"
-            aria-label={`Scatterplot of longitude against date for the full year, highlighting ${dates}.${peakText}`}
-            {...scatterDraw.handlers}
+            aria-label={`Scatterplot of ${axisName} against date for the full year, highlighting ${dates}.${peakText}`}
+            {...(isDrawingBox ? scatterDraw.handlers : {})}
           >
-            {meta.months.slice(0, -1).map((month, index) => (
-              <span
-                className="month"
-                key={month.t}
-                style={{ top: `${(month.t / span) * 100}%` }}
-              >
-                {monthLabel(month, index)}
-              </span>
-            ))}
-            {isFiltered &&
-              [tFrom, tTo].map((t, index) => (
-                <div className="edge" key={index} style={{ top: `${(t / span) * 100}%` }} />
-              ))}
-            {hasBox && <BoxOutline box={scatterBox} />}
-            {scatterDraw.draft && <BoxOutline box={scatterDraw.draft} draft />}
-            <div className="x-axis">
-              {LONGITUDE_TICKS.map((longitude) => (
-                <span key={longitude} style={{ left: longitudePosition(longitude) }}>
-                  {Math.abs(longitude).toFixed(1)}°W
+            {yTicks
+              .filter(({ share }) => isOnPlot(toPlotY(share)))
+              .map(({ share, label }) => (
+                <span className="month" key={share} style={{ top: percent(toPlotY(share)) }}>
+                  {label}
                 </span>
               ))}
-              <p className="x-axis-title">Longitude, west to east</p>
+            <div className="plot-clip">
+              {isFiltered &&
+                [tFrom, tTo].map((t, index) => (
+                  <div className="edge" key={index} style={{ top: percent(toPlotY(t / span)) }} />
+                ))}
+              {hasBox && <BoxOutline box={scatterBox} />}
+              {scatterDraw.draft && <BoxOutline box={scatterDraw.draft} draft />}
+            </div>
+          </div>
+          {!isHome(scatterCamera) && (
+            <button
+              className="pill scatter-reset"
+              type="button"
+              onClick={() => scatterView.current?.reset()}
+            >
+              Reset view
+            </button>
+          )}
+          <div className="x-axis">
+            {xTicks
+              .filter(({ share }) => isOnPlot(toPlotX(share)))
+              .map(({ share, label }) => (
+                <span key={share} style={{ left: percent(toPlotX(share)) }}>
+                  {label}
+                </span>
+              ))}
+            <div className="x-axis-title">
+              <p>{isTimeAxis ? "Time of day" : "Longitude, west to east"}</p>
+              <button
+                className="pill pill-icon axis-toggle"
+                type="button"
+                aria-label={isTimeAxis ? "Show longitude" : "Show time of day"}
+                title={isTimeAxis ? "Show longitude" : "Show time of day"}
+                onClick={() => setScatterAxis(isTimeAxis ? "longitude" : "time")}
+              >
+                {isTimeAxis ? (
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M2 4l4-1.5L10 4l4-1.5V12l-4 1.5L6 12l-4 1.5z" />
+                    <path d="M6 2.5V12M10 4v9.5" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <circle cx="8" cy="8" r="6" />
+                    <path d="M8 4.5V8l2.5 1.5" />
+                  </svg>
+                )}
+              </button>
             </div>
           </div>
         </section>

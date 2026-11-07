@@ -71,7 +71,7 @@ PROBLEM_GROUPS = {
         "Street Sign - Dangling", "Street Sign - Missing",
         "Traffic Signal Condition", "Tunnel Condition", "Wayfinding",
     ],
-    "Taxis & Ferries": [
+    "Taxis & For-Hire Vehicles": [
         "FHV Licensee Complaint", "Ferry Complaint", "Ferry Inquiry",
         "For Hire Vehicle Complaint", "For Hire Vehicle Report",
         "Found Property", "Green Taxi Complaint", "Green Taxi Report",
