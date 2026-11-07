@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { GRID_MAX } from "./selection";
 
 /** A rectangle on a plot, as shares of the plot's width and height from its top left. */
 export interface Box {
@@ -18,13 +17,7 @@ interface DragStart {
 // Shorter drags are slips of the mouse, not boxes.
 const MIN_DRAG_PIXELS = 4;
 
-const clampShare = (share: number) => Math.min(1, Math.max(0, share));
-
-/** The grid position under a share of a plot whose data fills `fill` of it, centered. */
-export const shareToGrid = (share: number, fill: number) =>
-  Math.round(clampShare(0.5 + (share - 0.5) / fill) * GRID_MAX);
-
-export const gridToShare = (grid: number, fill: number) => 0.5 + (grid / GRID_MAX - 0.5) * fill;
+export const clampShare = (share: number) => Math.min(1, Math.max(0, share));
 
 /** Lets the user drag out a box on a plot. Escape abandons the drag. */
 export function useBoxDraw(onDraw: (box: Box) => void) {

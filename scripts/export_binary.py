@@ -17,7 +17,8 @@ tags.bin holds one little-endian uint32 per call, in the same order:
 Calls are sorted by problem, then time, so any problem and time filter selects
 contiguous rows. meta.json gives each problem's start row and count, and lists
 the problems in each dropdown category. Calls with no coordinates can't be
-plotted: they are left out and counted in `missingCalls` by problem and tag.
+plotted, so they are left out, along with any problem or detail that has no
+other calls.
 """
 import json
 from datetime import datetime
@@ -38,6 +39,7 @@ NEW_YORK = ZoneInfo("America/New_York")
 FIRST_MONTH = (2025, 7)
 MONTHS = 12
 
+DETAIL_MASK = 0x3FF
 NEIGHBORHOOD_SHIFT = 10
 BOROUGH_SHIFT = 19
 UNRECORDED_DETAILS = {"", "N/A"}
@@ -149,7 +151,6 @@ def main():
         raise ValueError("Calls fall outside the expected date range")
 
     located = calls["Latitude"].notna() & calls["Longitude"].notna()
-    missing = calls[~located].groupby(["Problem_ID", "Tags"]).size()
     points = calls[located].sort_values(
         ["Problem_ID", "Created_Timestamp"], kind="stable"
     )
@@ -168,19 +169,32 @@ def main():
     records["t"] = points["Created_Timestamp"] - t_start
 
     counts = points["Problem_ID"].value_counts()
+    located_details = (points["Tags"] & DETAIL_MASK).groupby(points["Problem_ID"]).unique()
     subjects, start = [], 0
     for problem in problems.itertuples():
         count = int(counts.get(problem.id, 0))
+        if count == 0:
+            continue
+        details = subject_details(problem.id, numbered, unrecorded)
         subjects.append(
             {
                 "id": int(problem.id),
                 "name": problem.name,
                 "start": start,
                 "count": count,
-                "details": subject_details(problem.id, numbered, unrecorded),
+                "details": [
+                    detail for detail in details if detail["id"] in located_details[problem.id]
+                ],
             }
         )
         start += count
+
+    located_subjects = {subject["id"] for subject in subjects}
+    groups = []
+    for group in group_subjects(problems):
+        members = [id for id in group["subjects"] if id in located_subjects]
+        if members:
+            groups.append({**group, "subjects": members})
 
     meta = {
         "count": len(points),
@@ -197,15 +211,12 @@ def main():
         ],
         "days": day_starts(t_start, t_end),
         "subjects": subjects,
-        "groups": group_subjects(problems),
+        "groups": groups,
         "boroughs": [
             {"id": int(row.id), "name": row.name.title()} for row in boroughs.itertuples()
         ],
         "neighborhoods": [
             {"id": int(row.id), "name": row.name} for row in neighborhoods.itertuples()
-        ],
-        "missingCalls": [
-            [int(problem), int(tags), int(count)] for (problem, tags), count in missing.items()
         ],
     }
 

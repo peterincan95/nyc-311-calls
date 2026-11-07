@@ -1,5 +1,15 @@
 import { BYTES_PER_CALL, type CallData, type Meta } from "./data";
-import { GRID_MAX, type Selection, type Slice } from "./selection";
+import { GRID_MAX, SECONDS_PER_DAY, winterTime, type Selection, type Slice } from "./selection";
+
+/** The map's view: `x` and `y` are the share of the city at the panel's center. */
+export interface Camera {
+  zoom: number;
+  x: number;
+  y: number;
+}
+
+/** What the scatterplot's x-axis shows. */
+export type ScatterAxis = "longitude" | "time";
 
 export interface Rect {
   left: number;
@@ -39,12 +49,24 @@ interface Targets {
   farB: Target;
 }
 
+// Point colors from no calls to the densest areas, evenly spaced. Add or remove
+// stops freely, but keep the first one black so empty areas match the background.
+export const COLOR_STOPS = ["#000000", "#893426", "#E67F0E", "#FABA58", "#FFF3DA"];
+
 const MAX_PIXEL_RATIO = 2;
 const MAP_FILL = 0.94;
 export const SCATTER_FILL_X = 0.96;
 
 // Width of a point in CSS pixels, rounded to whole device pixels when drawn.
 const POINT_SIZE = 1.7;
+// Points grow with the square root of zoom, up to this multiple of their size.
+const MAX_ZOOM_GROWTH = 3.5;
+// Added to a point's brightness for each doubling of zoom. The scatterplot has no
+// empty streets or parks to set points off, so a lot of brightness washes it out.
+const MAP_ZOOM_BRIGHTNESS = 0.9;
+const SCATTER_ZOOM_BRIGHTNESS = 0;
+// Points this many device pixels wide or more are drawn round.
+const ROUND_POINT_SIZE = 4;
 
 // Brightness of one call. It falls once points would cover a plot more than this
 // many times over, so dense views keep their detail and look alike at any size.
@@ -52,6 +74,8 @@ const POINT_WEIGHT = 0.3;
 const FULL_WEIGHT_COVERAGE = 0.6;
 const WEIGHT_FALLOFF = 0.95;
 const OUTSIDE_RANGE_WEIGHT = 0.16;
+// A call's time of day is only exact to two seconds on the GPU.
+const TIME_MARGIN_SECONDS = 2;
 const NEAR_GLOW = 0.3;
 const FAR_GLOW = 0.75;
 
@@ -61,29 +85,47 @@ layout(location = 1) in float a_time;
 layout(location = 2) in uint a_tags;
 uniform vec2 u_scale;
 uniform vec2 u_offset;
+uniform float u_timeAsX;
 uniform float u_timeAsY;
 uniform float u_timeSpan;
+uniform vec2 u_winterTime;
+uniform vec2 u_timeRange;
 uniform float u_pointSize;
 uniform uint u_tagMask;
 uniform uint u_tagMatch;
 uniform vec4 u_area;
 void main() {
   gl_PointSize = u_pointSize;
-  bool outsideArea = any(lessThan(a_position, u_area.xy)) || any(greaterThan(a_position, u_area.zw));
+  bool isWinter = a_time >= u_winterTime.x && a_time < u_winterTime.y;
+  float second = mod(a_time - (isWinter ? 3600.0 : 0.0), ${SECONDS_PER_DAY}.0);
+  bool outsideArea = any(lessThan(a_position, u_area.xy)) || any(greaterThan(a_position, u_area.zw))
+    || second < u_timeRange.x || second > u_timeRange.y;
   if ((a_tags & u_tagMask) != u_tagMatch || outsideArea) {
     // Outside the clip volume, so the point is never drawn.
     gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
     return;
   }
-  vec2 point = vec2(a_position.x, mix(a_position.y, a_time / u_timeSpan, u_timeAsY));
+  vec2 point = vec2(
+    mix(a_position.x, second / ${SECONDS_PER_DAY}.0, u_timeAsX),
+    mix(a_position.y, a_time / u_timeSpan, u_timeAsY)
+  );
   gl_Position = vec4(point * u_scale + u_offset, 0.0, 1.0);
 }`;
 
 const POINT_FRAGMENT = `#version 300 es
 precision highp float;
 uniform float u_weight;
+uniform float u_pointSize;
+uniform float u_roundSize;
 out vec4 color;
-void main() { color = vec4(u_weight); }`;
+void main() {
+  float coverage = 1.0;
+  if (u_pointSize >= u_roundSize) {
+    float distance = length(gl_PointCoord - 0.5) * 2.0;
+    coverage = 1.0 - smoothstep(1.0 - 2.0 / u_pointSize, 1.0, distance);
+  }
+  color = vec4(u_weight * coverage);
+}`;
 
 const FULLSCREEN_VERTEX = `#version 300 es
 out vec2 v_uv;
@@ -131,6 +173,11 @@ void main() {
   color = vec4(sum);
 }`;
 
+function hexToVec3(hex: string) {
+  const channels = [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16) / 255);
+  return `vec3(${channels.map((channel) => channel.toFixed(4)).join(", ")})`;
+}
+
 const COMPOSITE_FRAGMENT = `#version 300 es
 precision highp float;
 in vec2 v_uv;
@@ -141,9 +188,13 @@ uniform float u_nearGlow;
 uniform float u_farGlow;
 out vec4 color;
 ${TONE}
-// Warm amber, fading to pale cream where calls are densest.
-const vec3 AMBER = vec3(0.910, 0.598, 0.400);
-const vec3 CREAM = vec3(1.0, 0.910, 0.724);
+const int STOP_COUNT = ${COLOR_STOPS.length};
+const vec3 STOPS[STOP_COUNT] = vec3[STOP_COUNT](${COLOR_STOPS.map(hexToVec3).join(", ")});
+vec3 gradient(float value) {
+  float position = clamp(value, 0.0, 1.0) * float(STOP_COUNT - 1);
+  int stop = min(int(position), STOP_COUNT - 2);
+  return mix(STOPS[stop], STOPS[stop + 1], position - float(stop));
+}
 float noise(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
 void main() {
   float core = tone(texture(u_density, v_uv).r);
@@ -151,7 +202,7 @@ void main() {
   float far = clamp(texture(u_far, v_uv).r * u_farGlow, 0.0, 1.0);
   float light = 1.0 - (1.0 - core) * (1.0 - near) * (1.0 - far);
   light += (noise(gl_FragCoord.xy) - 0.5) / 255.0;
-  color = vec4(light * mix(AMBER, CREAM, smoothstep(0.8, 1.0, light)), 1.0);
+  color = vec4(gradient(light), 1.0);
 }`;
 
 /** The share of the map panel's width and height the city fills, keeping it undistorted. */
@@ -228,7 +279,12 @@ export class CallRenderer {
   private scatter: Rect | null = null;
   private pixelRatio = 1;
   private selection: Selection | null = null;
+  private camera: Camera = { zoom: 1, x: 0.5, y: 0.5 };
   private frame = 0;
+  private scatterCamera: Camera = { zoom: 1, x: 0.5, y: 0.5 };
+  private needsMapDraw = true;
+  private needsScatterDraw = true;
+  private scatterAxis: ScatterAxis = "longitude";
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -272,6 +328,23 @@ export class CallRenderer {
   setSelection(selection: Selection) {
     this.selection = selection;
     this.requestDraw();
+  }
+
+  setScatterAxis(axis: ScatterAxis) {
+    this.scatterAxis = axis;
+    this.requestDraw();
+  }
+
+  /** Only the map changes, so the scatterplot can keep what it last drew. */
+  setCamera(camera: Camera) {
+    this.camera = camera;
+    this.requestDraw(true, false);
+  }
+
+  /** Only the scatterplot changes, so the map can keep what it last drew. */
+  setScatterCamera(camera: Camera) {
+    this.scatterCamera = camera;
+    this.requestDraw(false, true);
   }
 
   /** Draws immediately and waits for the GPU. Returns milliseconds taken. */
@@ -320,13 +393,17 @@ export class CallRenderer {
       points: createProgram(gl, POINT_VERTEX, POINT_FRAGMENT, [
         "u_scale",
         "u_offset",
+        "u_timeAsX",
         "u_timeAsY",
+        "u_winterTime",
+        "u_timeRange",
         "u_timeSpan",
         "u_pointSize",
         "u_weight",
         "u_tagMask",
         "u_tagMatch",
         "u_area",
+        "u_roundSize",
       ]),
       downsample: createProgram(gl, FULLSCREEN_VERTEX, DOWNSAMPLE_FRAGMENT, [
         "u_source",
@@ -365,23 +442,24 @@ export class CallRenderer {
     };
   }
 
-  private requestDraw() {
+  private requestDraw(needsMap = true, needsScatter = true) {
+    this.needsMapDraw ||= needsMap;
+    this.needsScatterDraw ||= needsScatter;
     if (this.frame) return;
     this.frame = requestAnimationFrame(() => {
       this.frame = 0;
-      this.draw();
+      this.draw(this.needsMapDraw, this.needsScatterDraw);
     });
   }
 
-  private draw() {
+  private draw(drawMap = true, drawScatter = true) {
     const { gl, resources, targets, map, scatter, selection } = this;
     if (!resources || !targets || !map || !scatter || !selection) return;
+    this.needsMapDraw = false;
+    this.needsScatterDraw = false;
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, targets.density.framebuffer);
-    gl.disable(gl.SCISSOR_TEST);
-    gl.viewport(0, 0, targets.density.width, targets.density.height);
     gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
 
     const { points, pointsVao } = resources;
     gl.useProgram(points.program);
@@ -391,10 +469,11 @@ export class CallRenderer {
     gl.enable(gl.SCISSOR_TEST);
     const { meta } = this.data;
     gl.uniform1f(points.uniforms.u_timeSpan!, meta.tEnd - meta.tStart);
+    gl.uniform2f(points.uniforms.u_winterTime!, ...winterTime(meta));
     gl.uniform1ui(points.uniforms.u_tagMask!, selection.mask);
     gl.uniform1ui(points.uniforms.u_tagMatch!, selection.match);
     // Half a grid step past each edge, so rounding can't drop calls on the edge.
-    const { west, east, south, north } = selection.area;
+    const { west, east, south, north, timeFrom, timeTo } = selection.area;
     gl.uniform4f(
       points.uniforms.u_area!,
       (west - 0.5) / GRID_MAX,
@@ -402,31 +481,69 @@ export class CallRenderer {
       (east + 0.5) / GRID_MAX,
       (north + 0.5) / GRID_MAX,
     );
-    const pointSize = Math.max(1, Math.round(POINT_SIZE * this.pixelRatio));
-    gl.uniform1f(points.uniforms.u_pointSize!, pointSize);
+    gl.uniform2f(
+      points.uniforms.u_timeRange!,
+      timeFrom - TIME_MARGIN_SECONDS,
+      timeTo + TIME_MARGIN_SECONDS,
+    );
+    gl.uniform1f(points.uniforms.u_roundSize!, ROUND_POINT_SIZE);
 
-    const fill = mapFill(this.data.meta.bounds, map.width, map.height);
-    // Points in a box are as crowded as they were, so measure coverage within the box.
-    const boxWidth = (east - west) / GRID_MAX;
-    const boxHeight = (north - south) / GRID_MAX;
-    const mapShare = fill[0] * fill[1] * boxWidth * boxHeight;
-    const mapWeight = this.pointWeight(selection, pointSize, map, mapShare);
-    const scatterShare = SCATTER_FILL_X * boxWidth;
-    const scatterWeight = this.pointWeight(selection, pointSize, scatter, scatterShare);
+    if (drawMap) {
+      const { zoom, x, y } = this.camera;
+      const fill = mapFill(this.data.meta.bounds, map.width, map.height);
+      const filled = fill[0] * fill[1];
+      const weight = this.startPanel(selection, map, filled, zoom, MAP_ZOOM_BRIGHTNESS);
+      const scaleX = 2 * fill[0] * zoom;
+      const scaleY = 2 * fill[1] * zoom;
+      this.setProjection(scaleX, scaleY, -scaleX * x, -scaleY * y, 0, 0);
+      this.drawSlices(selection.inside, weight);
+    }
 
-    this.setPanel(map);
-    this.setProjection(fill, 0);
-    this.drawSlices(selection.inside, mapWeight);
-
-    this.setPanel(scatter);
-    // A negative fill runs time downward, with the oldest calls at the top.
-    this.setProjection([SCATTER_FILL_X, -1], 1);
-    this.drawSlices(selection.inside, scatterWeight);
-    this.drawSlices(selection.outside, scatterWeight * OUTSIDE_RANGE_WEIGHT);
+    if (drawScatter) {
+      const { zoom, x, y } = this.scatterCamera;
+      const weight = this.startPanel(
+        selection,
+        scatter,
+        SCATTER_FILL_X,
+        zoom,
+        SCATTER_ZOOM_BRIGHTNESS,
+      );
+      const timeAsX = this.scatterAxis === "time" ? 1 : 0;
+      const scaleX = 2 * SCATTER_FILL_X * zoom;
+      // A negative scale runs time downward, with the oldest calls at the top.
+      const scaleY = -2 * zoom;
+      this.setProjection(scaleX, scaleY, -scaleX * x, -scaleY * y, timeAsX, 1);
+      this.drawSlices(selection.inside, weight);
+      this.drawSlices(selection.outside, weight * OUTSIDE_RANGE_WEIGHT);
+    }
 
     gl.disable(gl.BLEND);
     gl.disable(gl.SCISSOR_TEST);
     this.drawGlow(resources, targets);
+  }
+
+  /** Clears a panel and sizes its points for the zoom. Returns the points' brightness. */
+  private startPanel(
+    selection: Selection,
+    rect: Rect,
+    filled: number,
+    zoom: number,
+    zoomBrightness: number,
+  ) {
+    const { gl } = this;
+    const pointSize = this.devicePointSize(Math.min(Math.sqrt(zoom), MAX_ZOOM_GROWTH));
+    const baseWeight = this.pointWeight(selection, pointSize, rect, filled * zoom ** 2);
+    // Crowded views get less of the boost, so dense blocks don't merge into a haze.
+    const roominess = Math.sqrt(baseWeight / POINT_WEIGHT);
+
+    this.setPanel(rect);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniform1f(this.resources!.points.uniforms.u_pointSize!, pointSize);
+    return baseWeight * (1 + zoomBrightness * Math.log2(zoom) * roominess);
+  }
+
+  private devicePointSize(growth: number) {
+    return Math.max(1, Math.round(POINT_SIZE * growth * this.pixelRatio));
   }
 
   private setPanel(rect: Rect) {
@@ -442,15 +559,23 @@ export class CallRenderer {
   /** Uses the whole year's calls, so brightness holds steady while the range is dragged. */
   private pointWeight(selection: Selection, pointSize: number, rect: Rect, filled: number) {
     const plotPixels = rect.width * rect.height * this.pixelRatio ** 2 * filled;
-    const coverage = (selection.totalCount * pointSize ** 2) / plotPixels;
+    const coverage = (selection.cityCount * pointSize ** 2) / plotPixels;
     return POINT_WEIGHT * Math.min(1, (FULL_WEIGHT_COVERAGE / coverage) ** WEIGHT_FALLOFF);
   }
 
-  private setProjection([fillX, fillY]: [number, number] | number[], timeAsY: number) {
+  private setProjection(
+    scaleX: number,
+    scaleY: number,
+    offsetX: number,
+    offsetY: number,
+    timeAsX: number,
+    timeAsY: number,
+  ) {
     const { gl } = this;
     const { uniforms } = this.resources!.points;
-    gl.uniform2f(uniforms.u_scale!, 2 * fillX!, 2 * fillY!);
-    gl.uniform2f(uniforms.u_offset!, -fillX!, -fillY!);
+    gl.uniform2f(uniforms.u_scale!, scaleX, scaleY);
+    gl.uniform2f(uniforms.u_offset!, offsetX, offsetY);
+    gl.uniform1f(uniforms.u_timeAsX!, timeAsX);
     gl.uniform1f(uniforms.u_timeAsY!, timeAsY);
   }
 

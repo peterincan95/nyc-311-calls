@@ -5,6 +5,7 @@ import {
   NEIGHBORHOOD_MASK,
   NEIGHBORHOOD_SHIFT,
   type CallData,
+  type Meta,
   type Subject,
 } from "./data";
 import type { Filter, Place, TagFilter } from "./filters";
@@ -18,15 +19,58 @@ export interface Slice {
 /** The largest value of a call's x or y. */
 export const GRID_MAX = 65535;
 
-/** A rectangle of the city in call coordinates, edges included. */
+export const SECONDS_PER_DAY = 86400;
+const SECONDS_PER_HOUR = 3600;
+// New York's clocks change at 2am.
+const CLOCK_CHANGE_SECONDS = 2 * SECONDS_PER_HOUR;
+
+/** A rectangle of the city in call coordinates and a part of the day, edges included. */
 export interface Area {
   west: number;
   east: number;
   south: number;
   north: number;
+  /** Seconds after midnight. */
+  timeFrom: number;
+  timeTo: number;
 }
 
-export const WHOLE_CITY: Area = { west: 0, east: GRID_MAX, south: 0, north: GRID_MAX };
+export const WHOLE_CITY: Area = {
+  west: 0,
+  east: GRID_MAX,
+  south: 0,
+  north: GRID_MAX,
+  timeFrom: 0,
+  timeTo: SECONDS_PER_DAY,
+};
+
+/** When winter time starts and ends: the two days that aren't 24 hours long. */
+export function winterTime({ days }: Meta): [start: number, end: number] {
+  const changes = days
+    .slice(0, -1)
+    .filter((t, day) => days[day + 1]! - t !== SECONDS_PER_DAY)
+    .map((t) => t + CLOCK_CHANGE_SECONDS);
+  return [changes[0]!, changes[1]!];
+}
+
+/** Seconds after midnight in New York. `tStart` is a midnight in summer time. */
+function secondOfDay(t: number, [winterStart, winterEnd]: [number, number]) {
+  const isWinter = t >= winterStart && t < winterEnd;
+  return (t - (isWinter ? SECONDS_PER_HOUR : 0)) % SECONDS_PER_DAY;
+}
+
+function isInArea(
+  { west, east, south, north, timeFrom, timeTo }: Area,
+  position: number,
+  t: number,
+  winter: [number, number],
+) {
+  const x = position & 0xffff;
+  const y = position >>> 16;
+  if (x < west || x > east || y < south || y > north) return false;
+  const second = secondOfDay(t, winter);
+  return second >= timeFrom && second <= timeTo;
+}
 
 export interface Selection extends TagFilter {
   area: Area;
@@ -38,6 +82,8 @@ export interface Selection extends TagFilter {
   insideCount: number;
   /** Calls matching every filter across the whole year. */
   totalCount: number;
+  /** Like `totalCount`, ignoring the box. Sets brightness, so a box doesn't change it. */
+  cityCount: number;
 }
 
 function firstAtOrAfter(words: Uint32Array, start: number, end: number, t: number): number {
@@ -66,9 +112,10 @@ export function countCallsByDay(
   { meta, words, tags }: CallData,
   subjects: Subject[],
   { mask, match }: TagFilter,
-  { west, east, south, north }: Area,
+  area: Area,
 ): Uint32Array {
   const { days } = meta;
+  const winter = winterTime(meta);
   const counts = new Uint32Array(days.length - 1);
 
   for (const { start, count } of subjects) {
@@ -81,10 +128,7 @@ export function countCallsByDay(
         nextDay = days[day + 1]!;
       }
       if ((tags[call]! & mask) !== match) continue;
-      const position = words[call * 2]!;
-      const x = position & 0xffff;
-      const y = position >>> 16;
-      if (x >= west && x <= east && y >= south && y <= north) counts[day]! += 1;
+      if (isInArea(area, words[call * 2]!, t, winter)) counts[day]! += 1;
     }
   }
   return counts;
@@ -92,14 +136,15 @@ export function countCallsByDay(
 
 /** Runs over the subjects' calls in the time range that match the tags and area. */
 function forEachCall(
-  { words, tags }: CallData,
+  { meta, words, tags }: CallData,
   subjects: Subject[],
   { mask, match }: TagFilter,
-  { west, east, south, north }: Area,
+  area: Area,
   tFrom: number,
   tTo: number,
   visit: (tag: number) => void,
 ) {
+  const winter = winterTime(meta);
   for (const subject of subjects) {
     const end = subject.start + subject.count;
     const first = firstAtOrAfter(words, subject.start, end, tFrom);
@@ -107,10 +152,7 @@ function forEachCall(
     for (let call = first; call < last; call += 1) {
       const tag = tags[call]!;
       if ((tag & mask) !== match) continue;
-      const position = words[call * 2]!;
-      const x = position & 0xffff;
-      const y = position >>> 16;
-      if (x >= west && x <= east && y >= south && y <= north) visit(tag);
+      if (isInArea(area, words[call * 2]!, words[call * 2 + 1]!, winter)) visit(tag);
     }
   }
 }
@@ -178,10 +220,19 @@ export function selectCalls(
   tags: TagFilter,
   area: Area,
   dailyCounts: Uint32Array,
+  cityDailyCounts: Uint32Array,
   from: number,
   to: number,
 ): Selection {
-  const selection: Selection = { ...tags, area, inside: [], outside: [], insideCount: 0, totalCount: 0 };
+  const selection: Selection = {
+    ...tags,
+    area,
+    inside: [],
+    outside: [],
+    insideCount: 0,
+    totalCount: 0,
+    cityCount: cityDailyCounts.reduce((sum, count) => sum + count, 0),
+  };
   const tFrom = meta.days[from]!;
   const tTo = meta.days[to]!;
 
