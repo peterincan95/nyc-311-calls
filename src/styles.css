@@ -105,7 +105,7 @@ body,
   gap: 4px 12px;
   align-items: baseline;
   min-width: 0;
-  font-size: 26px;
+  font-size: 20px;
   font-weight: 500;
   line-height: 1.25;
 }
@@ -318,9 +318,33 @@ body,
 .panel .plot {
   position: absolute;
   inset: 0;
-  cursor: crosshair;
+  cursor: grab;
   touch-action: none;
   user-select: none;
+}
+
+.panel .plot.panning {
+  cursor: grabbing;
+}
+
+.panel .plot.drawing-box {
+  cursor: crosshair;
+}
+
+/* Keeps a box and the date edges inside the plot when they're panned past it. */
+.plot-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.map-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .box {
@@ -338,6 +362,10 @@ body,
   position: absolute;
   top: 12px;
   left: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
   color: var(--text-muted);
   font-size: 13px;
   pointer-events: none;
@@ -369,6 +397,13 @@ body,
   inset: 16px 24px 52px var(--month-column);
 }
 
+.pill.scatter-reset {
+  position: absolute;
+  top: 24px;
+  right: 32px;
+  background: var(--background);
+}
+
 .month {
   position: absolute;
   cursor: default;
@@ -391,12 +426,12 @@ body,
 .x-axis {
   position: absolute;
   cursor: default;
-  top: 100%;
-  right: 0;
-  left: 0;
+  right: 24px;
+  bottom: 8px;
+  left: var(--month-column);
   height: 44px;
   border-top: 1px solid #555;
-  color: var(--text-muted);
+  color: var(--text-soft);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
@@ -423,11 +458,35 @@ body,
 .x-axis-title {
   position: absolute;
   right: 0;
-  bottom: 2px;
+  bottom: 0;
   left: 0;
-  margin: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
-  text-align: center;
+}
+
+.x-axis-title p {
+  margin: 0;
+}
+
+.pill.axis-toggle {
+  position: relative;
+  width: 30px;
+  min-height: 20px;
+}
+
+/* A bigger target than the button looks, for fingers. */
+.axis-toggle::after {
+  position: absolute;
+  inset: -8px;
+  content: "";
+}
+
+.pill.axis-toggle svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* Timeline */
@@ -541,14 +600,11 @@ body,
 }
 
 .chart-area {
-  fill: #fff;
-  fill-opacity: 0.2;
+  fill-opacity: 0.3;
 }
 
 .chart-line {
   fill: none;
-  stroke: #fff;
-  stroke-opacity: 0.55;
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
@@ -572,65 +628,60 @@ body,
   transform: translateX(-50%);
 }
 
+/* Each handle sits outside the band, so the two never overlap. */
 .handle {
   position: absolute;
-  top: -6px;
-  bottom: -6px;
+  top: -8px;
+  bottom: 0;
   z-index: 1;
   width: 24px;
   outline: none;
   cursor: ew-resize;
   touch-action: none;
-  transform: translateX(-50%);
+}
+
+.handle-from {
+  transform: translateX(-100%);
 }
 
 .handle::before {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 50%;
   width: 2px;
   background: var(--tick);
   content: "";
-  transform: translateX(-50%);
+}
+
+.handle-from::before {
+  right: -1px;
+}
+
+.handle-to::before {
+  left: -1px;
 }
 
 .handle::after {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 12px;
-  height: 28px;
+  top: calc(50% + 4px);
+  width: 10px;
+  height: calc(var(--track-height) * 0.56);
   border: 1px solid var(--background);
-  border-radius: 3px;
   background: var(--tick);
   content: "";
-  transform: translate(-50%, -50%);
+  transform: translateY(-50%);
 }
 
-/* Narrow ranges put each handle outside its edge, so the two stay separate. */
-.narrow .handle-from {
-  transform: translateX(-100%);
+.handle-from::after {
+  right: 0;
+  border-right: 0;
+  border-radius: 3px 0 0 3px;
 }
 
-.narrow .handle-to {
-  transform: none;
-}
-
-.narrow .handle-from::before {
-  left: 100%;
-}
-
-.narrow .handle-to::before {
+.handle-to::after {
   left: 0;
-}
-
-.narrow .handle-from::after {
-  left: calc(100% - 7px);
-}
-
-.narrow .handle-to::after {
-  left: 7px;
+  border-left: 0;
+  border-radius: 0 3px 3px 0;
 }
 
 .handle:focus-visible::after {
@@ -740,7 +791,7 @@ body,
   }
 
   .scatter .plot {
-    inset: 10px 16px 44px var(--month-column);
+    inset: 10px 16px 48px var(--month-column);
   }
 
   .month {
@@ -749,7 +800,8 @@ body,
   }
 
   .x-axis {
-    height: 36px;
+    right: 16px;
+    height: 40px;
     font-size: 11px;
   }
 

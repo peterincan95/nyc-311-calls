@@ -124,16 +124,6 @@ export function buildPlaceMenu({ boroughs, neighborhoods }: Meta): MenuItem<Plac
   ];
 }
 
-/** The number of calls with no coordinates that fit the filter. */
-export function countMissing({ missingCalls }: Meta, subjects: Subject[], tags: TagFilter) {
-  const ids = new Set(subjects.map(({ id }) => id));
-  return missingCalls.reduce(
-    (sum, [subject, callTags, count]) =>
-      ids.has(subject) && (callTags & tags.mask) === tags.match ? sum + count : sum,
-    0,
-  );
-}
-
 export const toWords = (text: string) => text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 
 /** Whether each query word starts a word in the name, so "tree" doesn't find "Street". */
