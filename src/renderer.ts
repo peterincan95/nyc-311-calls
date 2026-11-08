@@ -1,4 +1,4 @@
-import { BYTES_PER_CALL, type CallData, type Meta } from "./data";
+import { BOROUGH_SHIFT, BYTES_PER_CALL, type CallData, type Meta } from "./data";
 import { GRID_MAX, SECONDS_PER_DAY, winterTime, type Selection, type Slice } from "./selection";
 
 /** The map's view: `x` and `y` are the share of the city at the panel's center. */
@@ -59,8 +59,11 @@ export const SCATTER_FILL_X = 0.96;
 
 // Width of a point in CSS pixels, rounded to whole device pixels when drawn.
 const POINT_SIZE = 1.7;
-// Points grow with the square root of zoom, up to this multiple of their size.
-const MAX_ZOOM_GROWTH = 3.5;
+// The closest the map and scatterplot zoom in.
+export const MAX_ZOOM = 18;
+// Points grow with zoom, reaching this multiple of their size at MAX_ZOOM.
+const MAX_ZOOM_GROWTH = 3.46;
+const ZOOM_GROWTH_POWER = Math.log(MAX_ZOOM_GROWTH) / Math.log(MAX_ZOOM);
 // Points on the zoomed-out map are this many device pixels smaller, reaching full size
 // by MAP_FULL_SIZE_ZOOM. Sizes round to whole device pixels, so a share of the size
 // would vanish on some screens.
@@ -79,10 +82,25 @@ const POINT_WEIGHT = 0.3;
 const FULL_WEIGHT_COVERAGE = 0.6;
 const WEIGHT_FALLOFF = 0.95;
 const OUTSIDE_RANGE_WEIGHT = 0.16;
+// Share of their color the scatterplot's calls outside the date range lose.
+const OUTSIDE_RANGE_DESATURATION = 0.5;
 // A call's time of day is only exact to two seconds on the GPU.
 const TIME_MARGIN_SECONDS = 2;
 const NEAR_GLOW = 0.3;
 const FAR_GLOW = 0.75;
+
+// The opacity slider scales brightness by up to this factor either way from its middle.
+const MAX_OPACITY_SCALE = 8;
+// Coloring by borough turns each borough's colors this far around the color wheel, by
+// borough id. Unknown boroughs keep the usual colors.
+const BOROUGH_HUE_DEGREES = [0, 28, 72, 144, 216, 288, 0, 0];
+
+/** How points are drawn, from the visualization options. */
+export interface PointStyle {
+  /** 0 to 100, where 50 leaves the brightness the app picks. */
+  opacity: number;
+  colorByBorough: boolean;
+}
 
 const POINT_VERTEX = `#version 300 es
 layout(location = 0) in vec2 a_position;
@@ -99,8 +117,11 @@ uniform float u_pointSize;
 uniform uint u_tagMask;
 uniform uint u_tagMatch;
 uniform vec4 u_area;
+uniform vec2 u_boroughHues[8];
+flat out vec2 v_hue;
 void main() {
   gl_PointSize = u_pointSize;
+  v_hue = u_boroughHues[(a_tags >> ${BOROUGH_SHIFT}u) & 7u];
   bool isWinter = a_time >= u_winterTime.x && a_time < u_winterTime.y;
   float second = mod(a_time - (isWinter ? 3600.0 : 0.0), ${SECONDS_PER_DAY}.0);
   bool outsideArea = any(lessThan(a_position, u_area.xy)) || any(greaterThan(a_position, u_area.zw))
@@ -122,6 +143,8 @@ precision highp float;
 uniform float u_weight;
 uniform float u_pointSize;
 uniform float u_roundSize;
+uniform float u_isOutside;
+flat in vec2 v_hue;
 out vec4 color;
 void main() {
   float coverage = 1.0;
@@ -129,7 +152,10 @@ void main() {
     float distance = length(gl_PointCoord - 0.5) * 2.0;
     coverage = 1.0 - smoothstep(1.0 - 2.0 / u_pointSize, 1.0, distance);
   }
-  color = vec4(u_weight * coverage);
+  // Density in red, each point's borough hue as a direction in green and blue, and the
+  // density of calls outside the date range in alpha.
+  float weight = u_weight * coverage;
+  color = vec4(weight, weight * v_hue, weight * u_isOutside);
 }`;
 
 const FULLSCREEN_VERTEX = `#version 300 es
@@ -141,7 +167,12 @@ void main() {
 }`;
 
 const TONE = `
-float tone(float density) { return 1.0 - exp(-density); }`;
+float tone(float density) { return 1.0 - exp(-density); }
+// Tones the density and scales the other channels to match.
+vec4 toned(vec4 value) {
+  float light = tone(value.r);
+  return vec4(light, value.gba * (light / max(value.r, 1e-6)));
+}`;
 
 const DOWNSAMPLE_FRAGMENT = `#version 300 es
 precision highp float;
@@ -151,14 +182,14 @@ uniform vec2 u_texel;
 uniform float u_applyTone;
 out vec4 color;
 ${TONE}
-float read(vec2 offset) {
-  float value = texture(u_source, v_uv + offset * u_texel).r;
-  return mix(value, tone(value), u_applyTone);
+vec4 read(vec2 offset) {
+  vec4 value = texture(u_source, v_uv + offset * u_texel);
+  return mix(value, toned(value), u_applyTone);
 }
 void main() {
-  float sum = read(vec2(-1.0, -1.0)) + read(vec2(1.0, -1.0))
-            + read(vec2(-1.0, 1.0)) + read(vec2(1.0, 1.0));
-  color = vec4(sum * 0.25);
+  vec4 sum = read(vec2(-1.0, -1.0)) + read(vec2(1.0, -1.0))
+           + read(vec2(-1.0, 1.0)) + read(vec2(1.0, 1.0));
+  color = sum * 0.25;
 }`;
 
 const BLUR_FRAGMENT = `#version 300 es
@@ -168,14 +199,14 @@ uniform sampler2D u_source;
 uniform vec2 u_step;
 out vec4 color;
 void main() {
-  float sum = texture(u_source, v_uv).r * 0.1964825;
-  sum += (texture(u_source, v_uv + u_step * 1.4117647).r
-        + texture(u_source, v_uv - u_step * 1.4117647).r) * 0.2969069;
-  sum += (texture(u_source, v_uv + u_step * 3.2941176).r
-        + texture(u_source, v_uv - u_step * 3.2941176).r) * 0.0944703;
-  sum += (texture(u_source, v_uv + u_step * 5.1764706).r
-        + texture(u_source, v_uv - u_step * 5.1764706).r) * 0.0103814;
-  color = vec4(sum);
+  vec4 sum = texture(u_source, v_uv) * 0.1964825;
+  sum += (texture(u_source, v_uv + u_step * 1.4117647)
+        + texture(u_source, v_uv - u_step * 1.4117647)) * 0.2969069;
+  sum += (texture(u_source, v_uv + u_step * 3.2941176)
+        + texture(u_source, v_uv - u_step * 3.2941176)) * 0.0944703;
+  sum += (texture(u_source, v_uv + u_step * 5.1764706)
+        + texture(u_source, v_uv - u_step * 5.1764706)) * 0.0103814;
+  color = sum;
 }`;
 
 function hexToVec3(hex: string) {
@@ -191,6 +222,8 @@ uniform sampler2D u_near;
 uniform sampler2D u_far;
 uniform float u_nearGlow;
 uniform float u_farGlow;
+uniform float u_colorByBorough;
+uniform float u_outsideDesaturation;
 out vec4 color;
 ${TONE}
 const int STOP_COUNT = ${COLOR_STOPS.length};
@@ -201,13 +234,33 @@ vec3 gradient(float value) {
   return mix(STOPS[stop], STOPS[stop + 1], position - float(stop));
 }
 float noise(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+// The same turn around the color wheel as CSS hue-rotate().
+vec3 hueRotate(vec3 c, float angle) {
+  float k = cos(angle);
+  float s = sin(angle);
+  mat3 turn = mat3(
+    0.213 + k * 0.787 - s * 0.213, 0.213 - k * 0.213 + s * 0.143, 0.213 - k * 0.213 - s * 0.787,
+    0.715 - k * 0.715 - s * 0.715, 0.715 + k * 0.285 + s * 0.140, 0.715 - k * 0.715 + s * 0.715,
+    0.072 - k * 0.072 + s * 0.928, 0.072 - k * 0.072 - s * 0.283, 0.072 + k * 0.928 + s * 0.072);
+  return clamp(turn * c, 0.0, 1.0);
+}
 void main() {
-  float core = tone(texture(u_density, v_uv).r);
-  float near = clamp(texture(u_near, v_uv).r * u_nearGlow, 0.0, 1.0);
-  float far = clamp(texture(u_far, v_uv).r * u_farGlow, 0.0, 1.0);
-  float light = 1.0 - (1.0 - core) * (1.0 - near) * (1.0 - far);
+  vec4 core = toned(texture(u_density, v_uv));
+  vec4 near = texture(u_near, v_uv) * u_nearGlow;
+  vec4 far = texture(u_far, v_uv) * u_farGlow;
+  float nearLight = clamp(near.r, 0.0, 1.0);
+  float farLight = clamp(far.r, 0.0, 1.0);
+  float light = 1.0 - (1.0 - core.r) * (1.0 - nearLight) * (1.0 - farLight);
   light += (noise(gl_FragCoord.xy) - 0.5) / 255.0;
-  color = vec4(gradient(light), 1.0);
+  vec3 rgb = gradient(light);
+  // Where boroughs meet, their hue directions blend.
+  vec2 hue = core.gb + near.gb + far.gb;
+  if (u_colorByBorough > 0.5 && length(hue) > 1e-5) rgb = hueRotate(rgb, atan(hue.y, hue.x));
+  // Grays by the share of the light that comes from calls outside the date range.
+  float outside = (core.a + near.a + far.a) / max(core.r + near.r + far.r, 1e-6);
+  float gray = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+  rgb = mix(rgb, vec3(gray), clamp(outside, 0.0, 1.0) * u_outsideDesaturation);
+  color = vec4(rgb, 1.0);
 }`;
 
 /** The share of the map panel's width and height the city fills, keeping it undistorted. */
@@ -255,7 +308,7 @@ function createProgram(
 function createTarget(gl: WebGL2RenderingContext, width: number, height: number): Target {
   const texture = gl.createTexture()!;
   gl.bindTexture(gl.TEXTURE_2D, texture);
-  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.R16F, width, height);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, width, height);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -290,6 +343,8 @@ export class CallRenderer {
   private needsMapDraw = true;
   private needsScatterDraw = true;
   private scatterAxis: ScatterAxis = "longitude";
+  private opacityScale = 1;
+  private colorByBorough = false;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -337,6 +392,12 @@ export class CallRenderer {
 
   setScatterAxis(axis: ScatterAxis) {
     this.scatterAxis = axis;
+    this.requestDraw();
+  }
+
+  setPointStyle({ opacity, colorByBorough }: PointStyle) {
+    this.opacityScale = MAX_OPACITY_SCALE ** ((opacity - 50) / 50);
+    this.colorByBorough = colorByBorough;
     this.requestDraw();
   }
 
@@ -409,6 +470,8 @@ export class CallRenderer {
         "u_tagMatch",
         "u_area",
         "u_roundSize",
+        "u_boroughHues",
+        "u_isOutside",
       ]),
       downsample: createProgram(gl, FULLSCREEN_VERTEX, DOWNSAMPLE_FRAGMENT, [
         "u_source",
@@ -422,6 +485,8 @@ export class CallRenderer {
         "u_far",
         "u_nearGlow",
         "u_farGlow",
+        "u_colorByBorough",
+        "u_outsideDesaturation",
       ]),
       pointsVao,
       emptyVao: gl.createVertexArray()!,
@@ -492,6 +557,13 @@ export class CallRenderer {
       timeTo + TIME_MARGIN_SECONDS,
     );
     gl.uniform1f(points.uniforms.u_roundSize!, ROUND_POINT_SIZE);
+    gl.uniform2fv(
+      points.uniforms.u_boroughHues!,
+      BOROUGH_HUE_DEGREES.flatMap((degrees) => {
+        const radians = (degrees * Math.PI) / 180;
+        return [Math.cos(radians), Math.sin(radians)];
+      }),
+    );
 
     if (drawMap) {
       const { zoom, x, y } = this.camera;
@@ -528,7 +600,7 @@ export class CallRenderer {
       const scaleY = -2 * zoom;
       this.setProjection(scaleX, scaleY, -scaleX * x, -scaleY * y, timeAsX, 1);
       this.drawSlices(selection.inside, weight);
-      this.drawSlices(selection.outside, weight * OUTSIDE_RANGE_WEIGHT);
+      this.drawSlices(selection.outside, weight * OUTSIDE_RANGE_WEIGHT, true);
     }
 
     gl.disable(gl.BLEND);
@@ -546,7 +618,7 @@ export class CallRenderer {
     shrinkPixels = 0,
   ) {
     const { gl } = this;
-    const growth = Math.min(Math.sqrt(zoom), MAX_ZOOM_GROWTH);
+    const growth = Math.min(zoom ** ZOOM_GROWTH_POWER, MAX_ZOOM_GROWTH);
     const pointSize = this.devicePointSize(growth, shrinkPixels);
     const baseWeight = this.pointWeight(selection, pointSize, rect, filled * zoom ** 2);
     // Crowded views get less of the boost, so dense blocks don't merge into a haze.
@@ -555,7 +627,8 @@ export class CallRenderer {
     this.setPanel(rect);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.uniform1f(this.resources!.points.uniforms.u_pointSize!, pointSize);
-    return baseWeight * (1 + zoomBrightness * Math.log2(zoom) * roominess);
+    const weight = baseWeight * (1 + zoomBrightness * Math.log2(zoom) * roominess);
+    return weight * this.opacityScale;
   }
 
   private devicePointSize(growth: number, shrinkPixels = 0) {
@@ -595,9 +668,11 @@ export class CallRenderer {
     gl.uniform1f(uniforms.u_timeAsY!, timeAsY);
   }
 
-  private drawSlices(slices: Slice[], weight: number) {
+  private drawSlices(slices: Slice[], weight: number, isOutside = false) {
     const { gl } = this;
-    gl.uniform1f(this.resources!.points.uniforms.u_weight!, weight);
+    const { uniforms } = this.resources!.points;
+    gl.uniform1f(uniforms.u_weight!, weight);
+    gl.uniform1f(uniforms.u_isOutside!, isOutside ? 1 : 0);
     for (const { first, count } of slices) gl.drawArrays(gl.POINTS, first, count);
   }
 
@@ -648,6 +723,8 @@ export class CallRenderer {
     gl.uniform1i(composite.uniforms.u_far!, 2);
     gl.uniform1f(composite.uniforms.u_nearGlow!, NEAR_GLOW);
     gl.uniform1f(composite.uniforms.u_farGlow!, FAR_GLOW);
+    gl.uniform1f(composite.uniforms.u_colorByBorough!, this.colorByBorough ? 1 : 0);
+    gl.uniform1f(composite.uniforms.u_outsideDesaturation!, OUTSIDE_RANGE_DESATURATION);
     pass(null);
     gl.activeTexture(gl.TEXTURE0);
   }

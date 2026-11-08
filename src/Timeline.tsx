@@ -34,6 +34,8 @@ interface TimelineProps {
   onChange: (range: DayRange) => void;
   onReset: () => void;
   startHandle: RefObject<HTMLDivElement | null>;
+  isOpen: boolean;
+  onToggle: (isOpen: boolean) => void;
 }
 
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
@@ -77,6 +79,8 @@ export function Timeline({
   onChange,
   onReset,
   startHandle,
+  isOpen,
+  onToggle,
 }: TimelineProps) {
   const track = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
@@ -177,81 +181,110 @@ export function Timeline({
     />
   );
 
+  const rangeText = `${formatDay(days[from]!)} – ${formatDay(days[to - 1]!)}`;
+
   return (
-    <div className="timeline">
-      <div className="range-pills" role="group" aria-label="Date range">
-        {presets.map(({ label, length }) => (
-          <button
-            type="button"
-            className="pill"
-            key={label}
-            aria-pressed={to - from === length}
-            onClick={() => applyPreset(length)}
-          >
-            {label}
-          </button>
-        ))}
+    <section className={isOpen ? "timeline" : "timeline collapsed"} aria-label="Timeline">
+      <div className="timeline-head">
+        {/* One button for both states, so focus stays put when the timeline opens or closes. */}
         <button
           type="button"
-          className="pill pill-icon"
-          aria-label="Reset to the full year"
-          title="Reset to the full year"
-          disabled={!isFiltered}
-          onClick={onReset}
+          className="timeline-toggle"
+          aria-expanded={isOpen}
+          aria-controls="timeline-body"
+          aria-label={isOpen ? "Hide timeline" : "Show timeline"}
+          title={isOpen ? "Hide timeline" : "Show timeline"}
+          onClick={() => onToggle(!isOpen)}
         >
           <svg viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M3.5 6.5a5 5 0 1 1-.2 3.2" />
-            <path d="M3 2.5v4h4" />
+            <path d={isOpen ? "M3.5 6 8 10.5 12.5 6" : "M3.5 10 8 5.5 12.5 10"} />
           </svg>
+          {!isOpen && <span>Timeline</span>}
         </button>
+        {isOpen && (
+          <>
+            <h2 className="timeline-title">Timeline</h2>
+            <div className="range-pills" role="group" aria-label="Date range">
+              {presets.map(({ label, length }) => (
+                <button
+                  type="button"
+                  className="pill"
+                  key={label}
+                  aria-pressed={to - from === length}
+                  onClick={() => applyPreset(length)}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="pill pill-icon"
+                aria-label="Reset to the full year"
+                title="Reset to the full year"
+                disabled={!isFiltered}
+                onClick={onReset}
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M3.5 6.5a5 5 0 1 1-.2 3.2" />
+                  <path d="M3 2.5v4h4" />
+                </svg>
+              </button>
+            </div>
+          </>
+        )}
       </div>
-      <div className="range-row" aria-hidden="true">
-        <span
-          className="range-label"
-          style={{ left: `clamp(112px, ${bandMiddle}%, calc(100% - 112px))` }}
-        >
-          {formatDay(days[from]!)} – {formatDay(days[to - 1]!)}
-        </span>
-      </div>
-      <div className="track" ref={track}>
-        <div
-          className={isFiltered ? "band band-filtered" : "band"}
-          style={{ left: percent(days[from]!), right: `${100 - (days[to]! / span) * 100}%` }}
-          onPointerDown={startDrag("band")}
-          onPointerMove={onDrag}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-        />
-        <svg
-          className="chart"
-          viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <path className="chart-area" d={chart.area} style={{ fill: chartColor }} />
-          <path
-            className="chart-line"
-            d={chart.line}
-            style={{ stroke: chartColor }}
-          />
-          <path className="day-ticks" d={dayTicks} />
-        </svg>
-        {months.slice(0, -1).map(({ t }) => (
-          <div className="tick" key={t} style={{ left: percent(t) }} />
-        ))}
-        {handle("from", from, "Start date", from)}
-        {handle("to", to, "End date", to - 1)}
-      </div>
-      <div className="month-row" aria-hidden="true">
-        {months.slice(0, -1).map(({ t, month }, index) => (
-          <span
-            key={t}
-            style={{ left: percent(t), width: percent(months[index + 1]!.t - t) }}
-          >
-            {monthName(month)}
-          </span>
-        ))}
-      </div>
-    </div>
+
+      {isOpen && (
+        <div id="timeline-body">
+          <div className="range-row" aria-hidden="true">
+            <span
+              className="range-label"
+              style={{ left: `clamp(112px, ${bandMiddle}%, calc(100% - 112px))` }}
+            >
+              {rangeText}
+            </span>
+          </div>
+          <div className="track" ref={track}>
+            <div
+              className={isFiltered ? "band band-filtered" : "band"}
+              style={{ left: percent(days[from]!), right: `${100 - (days[to]! / span) * 100}%` }}
+              onPointerDown={startDrag("band")}
+              onPointerMove={onDrag}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+            />
+            <svg
+              className="chart"
+              viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <path className="chart-area" d={chart.area} style={{ fill: chartColor }} />
+              <path
+                className="chart-line"
+                d={chart.line}
+                style={{ stroke: chartColor }}
+              />
+              <path className="day-ticks" d={dayTicks} />
+            </svg>
+            {months.slice(0, -1).map(({ t }) => (
+              <div className="tick" key={t} style={{ left: percent(t) }} />
+            ))}
+            {handle("from", from, "Start date", from)}
+            {handle("to", to, "End date", to - 1)}
+          </div>
+          <div className="month-row" aria-hidden="true">
+            {months.slice(0, -1).map(({ t, month }, index) => (
+              <span
+                key={t}
+                style={{ left: percent(t), width: percent(months[index + 1]!.t - t) }}
+              >
+                {monthName(month)}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }

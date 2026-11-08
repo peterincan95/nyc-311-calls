@@ -113,7 +113,7 @@ export function SummaryPanel({
               ))}
             </ol>
           ) : (
-            <p className="side-empty">No calls match these filters.</p>
+            <p className="side-empty">No requests match these filters.</p>
           )}
         </div>
       )}
