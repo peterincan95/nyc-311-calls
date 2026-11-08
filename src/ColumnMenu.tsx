@@ -41,6 +41,8 @@ interface ColumnMenuProps<T> {
   onSelect: (value: T) => void;
   /** How many calls an item would show. Only called while the menu is open. */
   countOf: (value: T) => number;
+  /** Columns whose order sorting wouldn't change, so they get no sort buttons. */
+  unsortedColumns?: number[];
 }
 
 const compactFormat = (maximumFractionDigits: number) =>
@@ -139,6 +141,7 @@ export function ColumnMenu<T>({
   selectedName,
   onSelect,
   countOf,
+  unsortedColumns = [],
 }: ColumnMenuProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -372,10 +375,10 @@ export function ColumnMenu<T>({
     );
     return (
       <div className="menu-column" key={column}>
-        {members.length > 0 && (
+        {members.length > 0 && !unsortedColumns.includes(column) && (
           <div className="menu-sort" role="group" aria-label={`Sort ${columnNames[column]}`}>
             {sortButton("name", "A–Z", "Sort alphabetically")}
-            {sortButton("count", "Most calls", "Sort by number of calls, most first")}
+            {sortButton("count", "Most requests", "Sort by number of requests, most first")}
           </div>
         )}
         <div
