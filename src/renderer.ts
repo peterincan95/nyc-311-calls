@@ -61,6 +61,11 @@ export const SCATTER_FILL_X = 0.96;
 const POINT_SIZE = 1.7;
 // Points grow with the square root of zoom, up to this multiple of their size.
 const MAX_ZOOM_GROWTH = 3.5;
+// Points on the zoomed-out map are this many device pixels smaller, reaching full size
+// by MAP_FULL_SIZE_ZOOM. Sizes round to whole device pixels, so a share of the size
+// would vanish on some screens.
+const MAP_HOME_SHRINK_PIXELS = 1;
+const MAP_FULL_SIZE_ZOOM = 2;
 // Added to a point's brightness for each doubling of zoom. The scatterplot has no
 // empty streets or parks to set points off, so a lot of brightness washes it out.
 const MAP_ZOOM_BRIGHTNESS = 0.9;
@@ -492,7 +497,16 @@ export class CallRenderer {
       const { zoom, x, y } = this.camera;
       const fill = mapFill(this.data.meta.bounds, map.width, map.height);
       const filled = fill[0] * fill[1];
-      const weight = this.startPanel(selection, map, filled, zoom, MAP_ZOOM_BRIGHTNESS);
+      const toFullSize = Math.min(1, Math.log2(zoom) / Math.log2(MAP_FULL_SIZE_ZOOM));
+      const shrink = MAP_HOME_SHRINK_PIXELS * (1 - toFullSize);
+      const weight = this.startPanel(
+        selection,
+        map,
+        filled,
+        zoom,
+        MAP_ZOOM_BRIGHTNESS,
+        shrink,
+      );
       const scaleX = 2 * fill[0] * zoom;
       const scaleY = 2 * fill[1] * zoom;
       this.setProjection(scaleX, scaleY, -scaleX * x, -scaleY * y, 0, 0);
@@ -529,9 +543,11 @@ export class CallRenderer {
     filled: number,
     zoom: number,
     zoomBrightness: number,
+    shrinkPixels = 0,
   ) {
     const { gl } = this;
-    const pointSize = this.devicePointSize(Math.min(Math.sqrt(zoom), MAX_ZOOM_GROWTH));
+    const growth = Math.min(Math.sqrt(zoom), MAX_ZOOM_GROWTH);
+    const pointSize = this.devicePointSize(growth, shrinkPixels);
     const baseWeight = this.pointWeight(selection, pointSize, rect, filled * zoom ** 2);
     // Crowded views get less of the boost, so dense blocks don't merge into a haze.
     const roominess = Math.sqrt(baseWeight / POINT_WEIGHT);
@@ -542,8 +558,8 @@ export class CallRenderer {
     return baseWeight * (1 + zoomBrightness * Math.log2(zoom) * roominess);
   }
 
-  private devicePointSize(growth: number) {
-    return Math.max(1, Math.round(POINT_SIZE * growth * this.pixelRatio));
+  private devicePointSize(growth: number, shrinkPixels = 0) {
+    return Math.max(1, Math.round(POINT_SIZE * growth * this.pixelRatio - shrinkPixels));
   }
 
   private setPanel(rect: Rect) {

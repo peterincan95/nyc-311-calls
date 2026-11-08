@@ -51,10 +51,209 @@ body,
 
 .app {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
   overflow: hidden;
+}
+
+.header {
+  grid-column: 1 / -1;
+}
+
+/* Summary column */
+
+.side-panel {
+  position: relative;
+  grid-column: 2;
+  grid-row: 2 / 4;
+  display: flex;
+  flex-direction: column;
+  width: 40px;
+  min-height: 0;
+  border-left: 1px solid var(--divider);
+  background: var(--background);
+}
+
+.side-panel.open {
+  width: 320px;
+}
+
+.side-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 14px 0;
+  border: 0;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 14px;
+  background: none;
+  cursor: pointer;
+}
+
+.side-toggle:hover {
+  color: var(--text);
+  background: #111;
+}
+
+.side-toggle:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+
+.side-toggle svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.side-rail-label {
+  writing-mode: vertical-rl;
+}
+
+.open .side-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 16px;
+}
+
+.side-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.side-head {
+  flex: none;
+  margin: 0;
+  padding: 15px 52px 15px 20px;
+  border-bottom: 1px solid var(--divider);
+  font-family: Montserrat, system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.side-list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-color: #555 var(--background);
+  scrollbar-width: thin;
+}
+
+.side-row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 20px;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: none;
+  cursor: pointer;
+}
+
+.side-row:not(.selected):hover {
+  background: var(--menu-active);
+}
+
+.side-row.selected {
+  align-items: center;
+  cursor: default;
+}
+
+.side-row.selected .side-name {
+  margin-right: auto;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.side-clear {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px -6px -4px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  color: var(--text-soft);
+  background: none;
+  cursor: pointer;
+}
+
+.side-clear:hover {
+  color: var(--text);
+  background: var(--menu-active);
+}
+
+.side-clear:focus-visible {
+  outline: 2px solid var(--text);
+}
+
+.side-clear svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.side-row:not(.selected):hover .side-name {
+  color: var(--text);
+}
+
+.side-row:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+
+.side-list li:nth-child(even) {
+  background: #141414;
+}
+
+.side-name {
+  min-width: 0;
+  color: var(--text-soft);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.side-count {
+  flex: none;
+  color: var(--text);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.side-empty {
+  margin: 0;
+  padding: 16px 20px;
+  color: var(--text-muted);
 }
 
 /* Header */
@@ -766,6 +965,17 @@ body,
 }
 
 @media (max-width: 760px) {
+  /* Phones are too narrow to share, so the open summary covers the plots. */
+  .side-panel.open {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    width: min(340px, 88vw);
+    box-shadow: -8px 0 24px rgb(0 0 0 / 60%);
+  }
+
   :root {
     --month-column: 72px;
     --track-height: 48px;

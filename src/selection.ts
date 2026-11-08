@@ -105,20 +105,20 @@ function addSlice(slices: Slice[], first: number, count: number) {
 }
 
 /**
- * The number of matching calls on each day, from one pass over the filter's calls.
- * Each subject's calls are in time order, so the day only ever moves forward.
+ * Each subject's matching calls on each day, in the subjects' order, from one pass
+ * over their calls. Each subject's calls are in time order, so the day only moves forward.
  */
-export function countCallsByDay(
+export function countSubjectsByDay(
   { meta, words, tags }: CallData,
   subjects: Subject[],
   { mask, match }: TagFilter,
   area: Area,
-): Uint32Array {
+): Uint32Array[] {
   const { days } = meta;
   const winter = winterTime(meta);
-  const counts = new Uint32Array(days.length - 1);
 
-  for (const { start, count } of subjects) {
+  return subjects.map(({ start, count }) => {
+    const counts = new Uint32Array(days.length - 1);
     let day = 0;
     let nextDay = days[1]!;
     for (let call = start; call < start + count; call += 1) {
@@ -130,9 +130,32 @@ export function countCallsByDay(
       if ((tags[call]! & mask) !== match) continue;
       if (isInArea(area, words[call * 2]!, t, winter)) counts[day]! += 1;
     }
-  }
-  return counts;
+    return counts;
+  });
 }
+
+/** Adds up each day across the subjects' daily counts. */
+export function sumByDay(subjectCounts: Uint32Array[], dayCount: number) {
+  const totals = new Uint32Array(dayCount);
+  for (const counts of subjectCounts) {
+    counts.forEach((count, day) => (totals[day]! += count));
+  }
+  return totals;
+}
+
+/** The number of matching calls on each day, across all the subjects. */
+export function countCallsByDay(
+  data: CallData,
+  subjects: Subject[],
+  tags: TagFilter,
+  area: Area,
+): Uint32Array {
+  return sumByDay(countSubjectsByDay(data, subjects, tags, area), data.meta.days.length - 1);
+}
+
+/** Calls from day `from` up to, but not including, day `to`. */
+export const countInRange = (counts: Uint32Array, from: number, to: number) =>
+  counts.subarray(from, to).reduce((sum, count) => sum + count, 0);
 
 /** Runs over the subjects' calls in the time range that match the tags and area. */
 function forEachCall(

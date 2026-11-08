@@ -47,10 +47,29 @@ function toTitleCase(name: string) {
     );
 }
 
-function complaintItem(subject: Subject, groupName: string): MenuItem<Filter> {
-  const display = (text: string) => (groupName === CAPITALIZED_GROUP ? toTitleCase(text) : text);
+function displayFor(groupName: string) {
+  return (text: string) => (groupName === CAPITALIZED_GROUP ? toTitleCase(text) : text);
+}
+
+/** A complaint's name as the app shows it. */
+function complaintName(subject: Subject, groupName: string) {
   // A complaint can't share its category's name, or the two would look identical.
-  const name = subject.name === groupName ? `${groupName} - General` : display(subject.name);
+  return subject.name === groupName ? `${groupName} - General` : displayFor(groupName)(subject.name);
+}
+
+/** Each complaint's name as the app shows it, by subject id. */
+export function complaintNames({ subjects, groups }: Meta) {
+  const subjectsById = new Map(subjects.map((subject) => [subject.id, subject]));
+  const names = new Map<number, string>();
+  for (const { name: category, subjects: ids } of groups) {
+    for (const id of ids) names.set(id, complaintName(subjectsById.get(id)!, category));
+  }
+  return names;
+}
+
+function complaintItem(subject: Subject, groupName: string): MenuItem<Filter> {
+  const display = displayFor(groupName);
+  const name = complaintName(subject, groupName);
   return {
     name,
     value: { name, subjects: [subject], ...ALL_TAGS },

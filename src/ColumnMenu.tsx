@@ -9,7 +9,7 @@ import {
 import { matchesQuery, toWords } from "./filters";
 
 /** Long enough that crossing an item on the way to the next column doesn't switch to it. */
-const HOVER_DELAY_MS = 110;
+const HOVER_DELAY_MS = 60;
 const SCREEN_MARGIN = 16;
 
 export interface MenuItem<T> {
@@ -151,7 +151,8 @@ export function ColumnMenu<T>({
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const searchBox = useRef<HTMLInputElement>(null);
-  const isHovering = useRef(false);
+  // The pointer or a sort moved the active item, so the lists shouldn't scroll to it.
+  const keepScroll = useRef(false);
   const isTouch = useRef(false);
   const hoverTimer = useRef(0);
   const hoverTarget = useRef<string | null>(null);
@@ -201,7 +202,7 @@ export function ColumnMenu<T>({
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen && !isHovering.current) {
+    if (isOpen && !keepScroll.current) {
       document.getElementById(activeId)?.scrollIntoView({ block: "nearest" });
     }
   }, [isOpen, activeId]);
@@ -223,7 +224,7 @@ export function ColumnMenu<T>({
   }, [isOpen, selected]);
 
   const open = () => {
-    isHovering.current = false;
+    keepScroll.current = false;
     setQuery("");
     setPath(pathTo(sortItems(items, orders, countOf), selected) ?? [0]);
     setIsOpen(true);
@@ -232,7 +233,9 @@ export function ColumnMenu<T>({
   /** Keeps the same items active and the search box focused. */
   const sortColumn = (column: number, order: SortOrder) => {
     const next = orders.map((current, index) => (index === column ? order : current));
-    isHovering.current = false;
+    // Re-sorting starts the column from the top rather than jumping to the active item.
+    keepScroll.current = true;
+    document.getElementById(`${id}-column-${column}`)?.scrollTo({ top: 0 });
     setPath(samePath(sorted, sortItems(items, next, countOf), path));
     setOrders(next);
     if (!isTouch.current) searchBox.current?.focus();
@@ -249,7 +252,7 @@ export function ColumnMenu<T>({
   };
 
   const hover = (column: number, index: number) => {
-    isHovering.current = true;
+    keepScroll.current = true;
     const target = `${column}-${index}`;
     if (hoverTarget.current === target) return;
     cancelHover();
@@ -323,7 +326,7 @@ export function ColumnMenu<T>({
 
   const onSearchKeyDown = (event: KeyboardEvent) => {
     const { key } = event;
-    isHovering.current = false;
+    keepScroll.current = false;
     if (key === "Escape" || key === "Tab") {
       event.preventDefault();
       close();
@@ -421,7 +424,7 @@ export function ColumnMenu<T>({
         aria-selected={item.value === selected}
         className={optionClass(index === resultIndex ? "active" : undefined)}
         onPointerMove={() => {
-          isHovering.current = true;
+          keepScroll.current = true;
           setResultIndex(index);
         }}
         onClick={() => choose(item.value!)}
@@ -481,7 +484,7 @@ export function ColumnMenu<T>({
             spellCheck={false}
             value={query}
             onChange={(event) => {
-              isHovering.current = false;
+              keepScroll.current = false;
               setQuery(event.target.value);
               setResultIndex(0);
             }}
