@@ -93,7 +93,7 @@ function complaintItem(subject: Subject, groupName: string): MenuItem<Filter> {
 
 export function buildComplaintMenu({ subjects, groups }: Meta): MenuItem<Filter>[] {
   const subjectsById = new Map(subjects.map((subject) => [subject.id, subject]));
-  const allCalls: Filter = { name: "All calls", subjects, ...ALL_TAGS };
+  const allCalls: Filter = { name: "All requests", subjects, ...ALL_TAGS };
 
   return [
     {
@@ -132,7 +132,6 @@ export function buildPlaceMenu({ boroughs, neighborhoods }: Meta): MenuItem<Plac
       name: city.name,
       value: city,
       section: "City",
-      hint: "All five boroughs",
       pin: "start",
       children: [],
     },

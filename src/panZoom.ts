@@ -1,7 +1,6 @@
-import type { Camera } from "./renderer";
+import { MAX_ZOOM, type Camera } from "./renderer";
 
 export const HOME: Camera = { zoom: 1, x: 0.5, y: 0.5 };
-const MAX_ZOOM = 12;
 // How far past its edges the data can be panned, as a share of its size.
 const PAN_MARGIN = 0.12;
 

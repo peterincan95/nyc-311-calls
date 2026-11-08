@@ -622,6 +622,120 @@ body,
   pointer-events: auto;
 }
 
+/* Visualization options */
+
+.visual-options {
+  position: relative;
+  pointer-events: auto;
+}
+
+.box-bar .pill[aria-expanded="true"] {
+  border-color: var(--tick);
+  color: var(--background);
+  background: var(--tick);
+}
+
+.pill-icon .knob {
+  fill: var(--background);
+}
+
+.pill[aria-expanded="true"] .knob {
+  fill: var(--tick);
+}
+
+.visual-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 232px;
+  padding: 14px 16px 16px;
+  color: var(--text-soft);
+  font-size: 14px;
+  background: var(--menu);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 60%);
+}
+
+.visual-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.visual-row output {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.visual-slider {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--tick);
+  cursor: pointer;
+}
+
+.visual-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  background: none;
+  cursor: pointer;
+}
+
+.visual-switch:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 4px;
+}
+
+.switch-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: #5a5a5a;
+  transition: background-color 0.15s;
+}
+
+.switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text);
+  transition: transform 0.15s;
+}
+
+.visual-switch[aria-checked="true"] .switch-track {
+  background: var(--tick);
+}
+
+.visual-switch[aria-checked="true"] .switch-thumb {
+  background: var(--background);
+  transform: translateX(16px);
+}
+
+.box-bar .visual-reset {
+  align-self: flex-start;
+  margin-bottom: 6px;
+  background: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch-track,
+  .switch-thumb {
+    transition: none;
+  }
+}
+
 .empty {
   position: absolute;
   pointer-events: none;
@@ -740,11 +854,82 @@ body,
   background: var(--background);
 }
 
+/* Matches the summary column's toggle, turned on its side. */
+.timeline.collapsed {
+  padding: 0;
+}
+
+.timeline-toggle {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 14px;
+  background: none;
+  cursor: pointer;
+}
+
+.timeline-toggle:hover {
+  color: var(--text);
+  background: #111;
+}
+
+.timeline-toggle:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+
+.timeline-toggle svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The toggle, title and date range buttons share a row, with the buttons on the right. */
+.timeline-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.timeline:not(.collapsed) .timeline-head {
+  margin-left: -8px;
+  padding-top: 10px;
+}
+
+.timeline:not(.collapsed) .timeline-toggle {
+  flex: none;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 16px;
+}
+
+.timeline-title {
+  margin: 0;
+  font-family: Montserrat, system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 22px;
+}
+
 .range-pills {
   display: flex;
   gap: 8px;
   align-items: center;
-  padding-top: 14px;
+  margin-left: auto;
 }
 
 .pill {

@@ -29,6 +29,7 @@ import {
 } from "./selection";
 import { SummaryPanel, type SummaryRow } from "./SummaryPanel";
 import { Timeline, type DayRange } from "./Timeline";
+import { DEFAULT_VISUALS, VisualOptions, type Visuals } from "./VisualOptions";
 
 const ANNOUNCE_DELAY_MS = 600;
 const SCATTER_FILL = [SCATTER_FILL_X, 1] as const;
@@ -53,7 +54,7 @@ export function App() {
   if (!data) {
     return (
       <p className="status" role="status">
-        Loading 311 calls… {Math.round(progress * 100)}%
+        Loading 311 requests… {Math.round(progress * 100)}%
       </p>
     );
   }
@@ -99,6 +100,8 @@ function Explorer({ data }: { data: CallData }) {
   const [isMapMoved, setIsMapMoved] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [isTimelineOpen, setIsTimelineOpen] = useState(true);
+  const [visuals, setVisuals] = useState<Visuals>(DEFAULT_VISUALS);
   // A complaint chosen in the summary, and the filter it replaced, so clearing it goes back.
   const [summaryChoice, setSummaryChoice] = useState<{ base: Filter; chosen: Filter } | null>(
     null,
@@ -183,7 +186,7 @@ function Explorer({ data }: { data: CallData }) {
   const callCount = selection.insideCount.toLocaleString("en-US");
   const dates = `${formatDay(tFrom)} to ${formatDay(meta.days[range[1] - 1]!)}`;
   const boxNote = hasBox ? " inside the drawn box" : "";
-  const description = `${filter.name} in ${place.name}${boxNote}: ${callCount} calls, ${dates}`;
+  const description = `${filter.name} in ${place.name}${boxNote}: ${callCount} requests, ${dates}`;
 
   useLayoutEffect(() => {
     let current: CallRenderer;
@@ -242,6 +245,10 @@ function Explorer({ data }: { data: CallData }) {
   useLayoutEffect(() => {
     renderer.current?.setScatterAxis(scatterAxis);
   }, [scatterAxis]);
+
+  useLayoutEffect(() => {
+    renderer.current?.setPointStyle(visuals);
+  }, [visuals]);
 
   useEffect(() => {
     mapView.current?.setLabelsVisible(showLabels);
@@ -308,11 +315,11 @@ function Explorer({ data }: { data: CallData }) {
 
   let emptyMessage = null;
   if (selection.totalCount === 0 && hasArea) {
-    emptyMessage = "No calls like these in this box. Try a bigger box.";
+    emptyMessage = "No requests like these in this box. Try a bigger box.";
   } else if (selection.totalCount === 0) {
-    emptyMessage = `No calls like these in ${place.name}. Try a wider area.`;
+    emptyMessage = `No requests like these in ${place.name}. Try a wider area.`;
   } else if (selection.insideCount === 0) {
-    emptyMessage = "No calls in these dates. Try a wider range.";
+    emptyMessage = "No requests in these dates. Try a wider range.";
   }
 
   const { zoom } = scatterCamera;
@@ -341,7 +348,7 @@ function Explorer({ data }: { data: CallData }) {
     <main className="app">
       <header className="header">
         <div className="sentence">
-          <h1>311 Calls</h1>
+          <h1>311 Requests</h1>
           <ColumnMenu
             id="complaint"
             label="regarding"
@@ -358,6 +365,7 @@ function Explorer({ data }: { data: CallData }) {
             label="in"
             items={placeMenu}
             columnNames={["Geography types", "Places"]}
+            unsortedColumns={[0]}
             searchLabel="Search boroughs and neighborhoods"
             selected={place}
             selectedName={place.name}
@@ -367,7 +375,7 @@ function Explorer({ data }: { data: CallData }) {
         </div>
         <div className="summary">
           <p>
-            <strong>{callCount}</strong> calls{hasBox && " in the box"}
+            <strong>{callCount}</strong> requests
           </p>
         </div>
       </header>
@@ -379,7 +387,7 @@ function Explorer({ data }: { data: CallData }) {
       <div className="stage" ref={stage}>
         <canvas className="points" ref={canvas} aria-hidden="true" />
 
-        <section className="panel" aria-label="Map of calls">
+        <section className="panel" aria-label="Map of requests">
           <canvas className="map-lines" ref={mapCanvas} aria-hidden="true" />
           <div
             className={isDrawingBox ? "plot map-plot drawing-box" : "plot map-plot"}
@@ -392,6 +400,7 @@ function Explorer({ data }: { data: CallData }) {
           </div>
           {emptyMessage && <p className="empty">{emptyMessage}</p>}
           <div className="box-bar">
+            <VisualOptions visuals={visuals} onChange={setVisuals} />
             <button
               className="pill"
               type="button"
@@ -426,7 +435,7 @@ function Explorer({ data }: { data: CallData }) {
           </div>
         </section>
 
-        <section className="panel scatter" aria-label={`Calls by ${axisName} and date`}>
+        <section className="panel scatter" aria-label={`Requests by ${axisName} and date`}>
           <div
             className={isDrawingBox ? "plot drawing-box" : "plot"}
             ref={scatterPlot}
@@ -504,6 +513,8 @@ function Explorer({ data }: { data: CallData }) {
         onChange={setRange}
         onReset={resetRange}
         startHandle={startHandle}
+        isOpen={isTimelineOpen}
+        onToggle={setIsTimelineOpen}
       />
 
       <SummaryPanel
