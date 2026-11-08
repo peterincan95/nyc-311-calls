@@ -29,10 +29,8 @@ const ALL_TAGS = { mask: 0, match: 0 };
 
 // This category's names come from the source data in capitals.
 const CAPITALIZED_GROUP = "Housing Conditions";
+const OTHER_GROUP = "Other";
 const SMALL_WORDS = new Set(["a", "and", "at", "by", "for", "in", "of", "on", "or", "the", "to"]);
-
-const byName = <T extends { name: string }>(a: T, b: T) =>
-  a.name.localeCompare(b.name, "en", { sensitivity: "base" });
 
 export const combineTags = (a: TagFilter, b: TagFilter): TagFilter => ({
   mask: a.mask | b.mask,
@@ -84,6 +82,7 @@ export function buildComplaintMenu({ subjects, groups }: Meta): MenuItem<Filter>
       value: allCalls,
       section: "Categories",
       hint: "Every complaint in every category",
+      pin: "start" as const,
       children: [],
     },
     ...groups.map(({ name, subjects: ids }) => {
@@ -92,7 +91,9 @@ export function buildComplaintMenu({ subjects, groups }: Meta): MenuItem<Filter>
         name,
         value: { name, subjects: members, ...ALL_TAGS },
         section: "Categories",
-        children: members.map((subject) => complaintItem(subject, name)).sort(byName),
+        // Other stays last, however the list is sorted.
+        pin: name === OTHER_GROUP ? ("end" as const) : undefined,
+        children: members.map((subject) => complaintItem(subject, name)),
       };
     }),
   ];
@@ -108,7 +109,14 @@ export function buildPlaceMenu({ boroughs, neighborhoods }: Meta): MenuItem<Plac
   });
 
   return [
-    { name: city.name, value: city, section: "City", hint: "All five boroughs", children: [] },
+    {
+      name: city.name,
+      value: city,
+      section: "City",
+      hint: "All five boroughs",
+      pin: "start",
+      children: [],
+    },
     {
       name: "Boroughs",
       children: boroughs.map(({ id, name }) =>
