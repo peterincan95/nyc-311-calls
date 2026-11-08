@@ -6,6 +6,7 @@ import {
   buildComplaintMenu,
   buildPlaceMenu,
   combineTags,
+  complaintNames,
   type Filter,
   type Place,
 } from "./filters";
@@ -15,14 +16,18 @@ import { CallRenderer, SCATTER_FILL_X, type Rect, type ScatterAxis } from "./ren
 import { dateTicks, hourTicks, longitudeTicks } from "./scatterAxes";
 import {
   countCallsByDay,
+  countInRange,
+  countSubjectsByDay,
   countComplaints,
   countPlaces,
   GRID_MAX,
   SECONDS_PER_DAY,
   selectCalls,
+  sumByDay,
   WHOLE_CITY,
   type Area,
 } from "./selection";
+import { SummaryPanel, type SummaryRow } from "./SummaryPanel";
 import { Timeline, type DayRange } from "./Timeline";
 
 const ANNOUNCE_DELAY_MS = 600;
@@ -73,6 +78,17 @@ function Explorer({ data }: { data: CallData }) {
 
   const complaintMenu = useMemo(() => buildComplaintMenu(meta), [meta]);
   const placeMenu = useMemo(() => buildPlaceMenu(meta), [meta]);
+  const complaintNameById = useMemo(() => complaintNames(meta), [meta]);
+  // The complaint menu's own filters, so choosing from the summary also marks the menu.
+  const complaintFilters = useMemo(() => {
+    const filters = new Map<number, Filter>();
+    for (const category of complaintMenu) {
+      for (const { value } of category.children) {
+        if (value && value.mask === 0) filters.set(value.subjects[0]!.id, value);
+      }
+    }
+    return filters;
+  }, [complaintMenu]);
   const [filter, setFilter] = useState<Filter>(complaintMenu[0]!.value!);
   const [place, setPlace] = useState<Place>(placeMenu[0]!.value!);
   const [range, setRange] = useState<DayRange>(fullRange);
@@ -82,6 +98,11 @@ function Explorer({ data }: { data: CallData }) {
   const [isDrawingBox, setIsDrawingBox] = useState(false);
   const [isMapMoved, setIsMapMoved] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  // A complaint chosen in the summary, and the filter it replaced, so clearing it goes back.
+  const [summaryChoice, setSummaryChoice] = useState<{ base: Filter; chosen: Filter } | null>(
+    null,
+  );
   const [scatterAxis, setScatterAxis] = useState<ScatterAxis>("longitude");
   const [scatterCamera, setScatterCamera] = useState(HOME);
   const [scatterSize, setScatterSize] = useState({ width: 1, height: 1 });
@@ -104,19 +125,36 @@ function Explorer({ data }: { data: CallData }) {
 
   const hasArea = area !== WHOLE_CITY;
   const hasBox = hasArea || boxSetDates;
+  // Choosing in the header afterwards replaces the summary's choice.
+  const isSummaryChoice = summaryChoice !== null && summaryChoice.chosen === filter;
   const isTimeAxis = scatterAxis === "time";
   const axisName = isTimeAxis ? "time of day" : "longitude";
 
   const tags = useMemo(() => combineTags(filter, place), [filter, place]);
-  const cityDailyCounts = useMemo(
-    () => countCallsByDay(data, filter.subjects, tags, WHOLE_CITY),
-    [data, filter, tags],
+  // Each complaint's calls by day, so the summary can total any date range quickly.
+  const subjectDailyCounts = useMemo(
+    () => countSubjectsByDay(data, filter.subjects, tags, area),
+    [data, filter, tags, area],
   );
   const dailyCounts = useMemo(
-    () =>
-      area === WHOLE_CITY ? cityDailyCounts : countCallsByDay(data, filter.subjects, tags, area),
-    [data, filter, tags, area, cityDailyCounts],
+    () => sumByDay(subjectDailyCounts, meta.days.length - 1),
+    [subjectDailyCounts, meta],
   );
+  const cityDailyCounts = useMemo(
+    () =>
+      area === WHOLE_CITY ? dailyCounts : countCallsByDay(data, filter.subjects, tags, WHOLE_CITY),
+    [data, filter, tags, area, dailyCounts],
+  );
+  const summaryRows = useMemo(() => {
+    const rows: SummaryRow[] = filter.subjects.map(({ id }, index) => ({
+      id,
+      name: complaintNameById.get(id)!,
+      count: countInRange(subjectDailyCounts[index]!, range[0], range[1]),
+    }));
+    return rows
+      .filter(({ count }) => count > 0)
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [filter, complaintNameById, subjectDailyCounts, range]);
   const selection = useMemo(
     () =>
       selectCalls(
@@ -466,6 +504,22 @@ function Explorer({ data }: { data: CallData }) {
         onChange={setRange}
         onReset={resetRange}
         startHandle={startHandle}
+      />
+
+      <SummaryPanel
+        isOpen={isSummaryOpen}
+        onToggle={setIsSummaryOpen}
+        rows={summaryRows}
+        onSelect={(id) => {
+          const chosen = complaintFilters.get(id)!;
+          setSummaryChoice({ base: isSummaryChoice ? summaryChoice.base : filter, chosen });
+          setFilter(chosen);
+        }}
+        selectedId={isSummaryChoice ? filter.subjects[0]!.id : null}
+        onClear={() => {
+          if (summaryChoice) setFilter(summaryChoice.base);
+          setSummaryChoice(null);
+        }}
       />
     </main>
   );
