@@ -23,7 +23,11 @@ export interface MenuItem<T> {
   parent?: string;
   /** Shown in the next column when there are no children. */
   hint?: string;
+  /** Keeps the item first or last in its column, however the column is sorted. */
+  pin?: "start" | "end";
 }
+
+type SortOrder = "name" | "count";
 
 interface ColumnMenuProps<T> {
   id: string;
@@ -47,6 +51,47 @@ const millionsFormat = compactFormat(1);
 /** 165, 17k or 3.8M. */
 const formatCount = (count: number) =>
   (count < 1_000_000 ? thousandsFormat : millionsFormat).format(count).replace("K", "k");
+
+const byName = (a: string, b: string) => a.localeCompare(b, "en", { sensitivity: "base" });
+
+/** Sorts each column of the menu its own way. Items that select nothing have no count. */
+function sortItems<T>(
+  items: MenuItem<T>[],
+  orders: SortOrder[],
+  countOf: (value: T) => number,
+  column = 0,
+): MenuItem<T>[] {
+  const isByCount = orders[column] === "count";
+  const rank = ({ pin }: MenuItem<T>) => (pin === "start" ? 0 : pin === "end" ? 2 : 1);
+  const counts = new Map(
+    items.map((item) => [item, isByCount && item.value !== undefined ? countOf(item.value) : -1]),
+  );
+  return [...items]
+    .sort(
+      (a, b) =>
+        rank(a) - rank(b) || counts.get(b)! - counts.get(a)! || byName(a.name, b.name),
+    )
+    .map((item) =>
+      item.children.length > 0
+        ? { ...item, children: sortItems(item.children, orders, countOf, column + 1) }
+        : item,
+    );
+}
+
+/** The same items' positions once the menu is sorted another way. Names are unique in a column. */
+function samePath<T>(from: MenuItem<T>[], to: MenuItem<T>[], path: number[]) {
+  const moved: number[] = [];
+  let before = from;
+  let after = to;
+  for (const index of path) {
+    const position = after.findIndex(({ name }) => name === before[index]?.name);
+    if (position < 0) break;
+    moved.push(position);
+    before = before[index]!.children;
+    after = after[position]!.children;
+  }
+  return moved.length > 0 ? moved : [0];
+}
 
 function pathTo<T>(items: MenuItem<T>[], value: T): number[] | null {
   for (const [index, item] of items.entries()) {
@@ -100,6 +145,7 @@ export function ColumnMenu<T>({
   /** The active item in each column, up to the column the user is in. */
   const [path, setPath] = useState<number[]>([0]);
   const [resultIndex, setResultIndex] = useState(0);
+  const [orders, setOrders] = useState<SortOrder[]>(() => columnNames.map(() => "name"));
 
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -111,16 +157,21 @@ export function ColumnMenu<T>({
   const hoverTarget = useRef<string | null>(null);
 
   const { isSearching, sections } = useMemo(() => search(items, query), [items, query]);
+  // Counts are only worked out while the menu is open.
+  const sorted = useMemo(
+    () => (isOpen ? sortItems(items, orders, countOf) : items),
+    [isOpen, items, orders, countOf],
+  );
   const results = sections.flatMap(([, members]) => members);
 
   const columnCount = columnNames.length;
   const depth = path.length - 1;
-  const activeItem = itemAt(items, path);
+  const activeItem = itemAt(sorted, path);
   /** The item whose children fill a column. Columns past the active one have none. */
   const parentOf = (column: number) =>
-    column > 0 && column <= path.length ? itemAt(items, path.slice(0, column)) : undefined;
+    column > 0 && column <= path.length ? itemAt(sorted, path.slice(0, column)) : undefined;
   const columns = columnNames.map((_, column) =>
-    column === 0 ? items : (parentOf(column)?.children ?? []),
+    column === 0 ? sorted : (parentOf(column)?.children ?? []),
   );
   // Phones only have room for two columns, so the third replaces the first.
   const isShifted = columnCount > 2 && columns[2]!.length > 0;
@@ -174,8 +225,17 @@ export function ColumnMenu<T>({
   const open = () => {
     isHovering.current = false;
     setQuery("");
-    setPath(pathTo(items, selected) ?? [0]);
+    setPath(pathTo(sortItems(items, orders, countOf), selected) ?? [0]);
     setIsOpen(true);
+  };
+
+  /** Keeps the same items active and the search box focused. */
+  const sortColumn = (column: number, order: SortOrder) => {
+    const next = orders.map((current, index) => (index === column ? order : current));
+    isHovering.current = false;
+    setPath(samePath(sorted, sortItems(items, next, countOf), path));
+    setOrders(next);
+    if (!isTouch.current) searchBox.current?.focus();
   };
 
   const close = () => {
@@ -296,36 +356,55 @@ export function ColumnMenu<T>({
   const renderColumn = (column: number) => {
     const parent = parentOf(column);
     const members = columns[column]!;
-    return (
-      <div
-        className="menu-column"
-        id={`${id}-column-${column}`}
-        // Restarts the column, and its scroll position, when its parent changes.
-        key={`${column}:${path.slice(0, column).join("-")}`}
-        role="listbox"
-        aria-label={parent ? `${columnNames[column]} in ${parent.name}` : columnNames[column]}
+    const sortButton = (order: SortOrder, text: string, description: string) => (
+      <button
+        type="button"
+        className="menu-sort-button"
+        aria-pressed={orders[column] === order}
+        title={description}
+        onClick={() => sortColumn(column, order)}
       >
-        {members.map((item, index) => {
-          let state;
-          if (path[column] === index) state = column === depth ? "active" : "shown";
-          return (
-            <div
-              key={item.name}
-              id={optionId(column, index)}
-              role="option"
-              aria-selected={item.value !== undefined && item.value === selected}
-              className={optionClass(state)}
-              // Move, not enter: rows appearing under a resting pointer shouldn't take the highlight.
-              onPointerMove={() => hover(column, index)}
-              onPointerLeave={cancelHover}
-              onClick={() => clickItem(item, column, index)}
-            >
-              {itemName(item)}
-              {item.children.length > 0 && <span className="menu-more" aria-hidden="true" />}
-            </div>
-          );
-        })}
-        {members.length === 0 && parent?.hint && <p className="menu-hint">{parent.hint}</p>}
+        {text}
+      </button>
+    );
+    return (
+      <div className="menu-column" key={column}>
+        {members.length > 0 && (
+          <div className="menu-sort" role="group" aria-label={`Sort ${columnNames[column]}`}>
+            {sortButton("name", "A–Z", "Sort alphabetically")}
+            {sortButton("count", "Most calls", "Sort by number of calls, most first")}
+          </div>
+        )}
+        <div
+          className="menu-list"
+          id={`${id}-column-${column}`}
+          // Restarts the list, and its scroll position, when its parent changes.
+          key={path.slice(0, column).join("-")}
+          role="listbox"
+          aria-label={parent ? `${columnNames[column]} in ${parent.name}` : columnNames[column]}
+        >
+          {members.map((item, index) => {
+            let state;
+            if (path[column] === index) state = column === depth ? "active" : "shown";
+            return (
+              <div
+                key={item.name}
+                id={optionId(column, index)}
+                role="option"
+                aria-selected={item.value !== undefined && item.value === selected}
+                className={optionClass(state)}
+                // Move, not enter: rows appearing under a resting pointer shouldn't take the highlight.
+                onPointerMove={() => hover(column, index)}
+                onPointerLeave={cancelHover}
+                onClick={() => clickItem(item, column, index)}
+              >
+                {itemName(item)}
+                {item.children.length > 0 && <span className="menu-more" aria-hidden="true" />}
+              </div>
+            );
+          })}
+          {members.length === 0 && parent?.hint && <p className="menu-hint">{parent.hint}</p>}
+        </div>
       </div>
     );
   };
@@ -429,7 +508,7 @@ export function ColumnMenu<T>({
                   className="menu-back"
                   onClick={() => setPath([path[0]!])}
                 >
-                  ‹ {items[path[0]!]!.name}
+                  ‹ {sorted[path[0]!]!.name}
                 </button>
               )}
               <div className={isShifted ? "menu-columns shifted" : "menu-columns"}>
