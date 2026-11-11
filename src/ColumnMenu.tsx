@@ -148,7 +148,7 @@ export function ColumnMenu<T>({
   /** The active item in each column, up to the column the user is in. */
   const [path, setPath] = useState<number[]>([0]);
   const [resultIndex, setResultIndex] = useState(0);
-  const [orders, setOrders] = useState<SortOrder[]>(() => columnNames.map(() => "name"));
+  const [orders, setOrders] = useState<SortOrder[]>(() => columnNames.map(() => "count"));
 
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
