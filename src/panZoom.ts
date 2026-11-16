@@ -1,4 +1,4 @@
-import { MAX_ZOOM, type Camera } from "./renderer";
+import type { Camera } from "./renderer";
 
 export const HOME: Camera = { zoom: 1, x: 0.5, y: 0.5 };
 // How far past its edges the data can be panned, as a share of its size.
@@ -36,6 +36,7 @@ export class PanZoom {
   constructor(
     private plot: HTMLElement,
     private yDirection: 1 | -1,
+    private maxZoom: number,
     private onChange: (camera: Camera) => void,
   ) {
     plot.addEventListener("wheel", this.onWheel, { passive: false });
@@ -88,6 +89,8 @@ export class PanZoom {
   private limited({ zoom, x, y }: Camera): Camera {
     const limit = (center: number, fill: number) => {
       const halfView = Math.min(0.5 / (fill * zoom), 0.5);
+      // A plot laid out at no size (in a hidden window, say) mustn't lose the camera for good.
+      if (!Number.isFinite(center) || !Number.isFinite(halfView)) return 0.5;
       return clamp(center, halfView - PAN_MARGIN, 1 - halfView + PAN_MARGIN);
     };
     return { zoom, x: limit(x, this.fill[0]), y: limit(y, this.fill[1]) };
@@ -100,7 +103,7 @@ export class PanZoom {
 
   /** Zooms while keeping the data under a point on the plot still. */
   private zoomAround(shareX: number, shareY: number, factor: number) {
-    const zoom = clamp(this.camera.zoom * factor, 1, MAX_ZOOM);
+    const zoom = clamp(this.camera.zoom * factor, 1, this.maxZoom);
     const dataX = this.dataX(shareX);
     const dataY = this.dataY(shareY);
     this.moveTo({

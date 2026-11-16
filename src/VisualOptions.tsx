@@ -4,9 +4,16 @@ export interface Visuals {
   /** 0 to 100, where 50 leaves the brightness the app picks. */
   opacity: number;
   colorByBorough: boolean;
+  streets: boolean;
+  neighborhoods: boolean;
 }
 
-export const DEFAULT_VISUALS: Visuals = { opacity: 50, colorByBorough: false };
+export const DEFAULT_VISUALS: Visuals = {
+  opacity: 50,
+  colorByBorough: false,
+  streets: true,
+  neighborhoods: false,
+};
 
 interface VisualOptionsProps {
   visuals: Visuals;
@@ -93,6 +100,32 @@ export function VisualOptions({ visuals, onChange }: VisualOptionsProps) {
             onClick={() => onChange({ ...visuals, colorByBorough: !visuals.colorByBorough })}
           >
             <span>Color by borough</span>
+            <span className="switch-track" aria-hidden="true">
+              <span className="switch-thumb" />
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className="visual-switch"
+            role="switch"
+            aria-checked={visuals.streets}
+            onClick={() => onChange({ ...visuals, streets: !visuals.streets })}
+          >
+            <span>Streets</span>
+            <span className="switch-track" aria-hidden="true">
+              <span className="switch-thumb" />
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className="visual-switch"
+            role="switch"
+            aria-checked={visuals.neighborhoods}
+            onClick={() => onChange({ ...visuals, neighborhoods: !visuals.neighborhoods })}
+          >
+            <span>Neighborhoods</span>
             <span className="switch-track" aria-hidden="true">
               <span className="switch-thumb" />
             </span>

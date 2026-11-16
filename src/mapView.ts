@@ -1,7 +1,7 @@
-import type { Boundaries, Meta } from "./data";
+import type { Boundaries, Meta, Streets } from "./data";
 import type { Box } from "./box";
 import { isHome, PanZoom } from "./panZoom";
-import { mapFill, type CallRenderer } from "./renderer";
+import { MAP_MAX_ZOOM, mapFill, type CallRenderer } from "./renderer";
 import { GRID_MAX, WHOLE_CITY, type Area } from "./selection";
 
 const MAX_PIXEL_RATIO = 2;
@@ -20,9 +20,38 @@ const LABEL_MIN_WIDTH = 70;
 const LABEL_MAX_CHARACTERS = 20;
 const LABEL_LINE_HEIGHT = 14;
 const LABEL_GAP = 4;
-const LABEL_COLOR = "#ababab";
+const LABEL_COLOR = "#cfcfcf";
 const LABEL_FONT = '13px "IBM Plex Sans Condensed", sans-serif';
 const LABEL_ITALIC_FONT = `italic ${LABEL_FONT}`;
+// Neighborhood names fade out between these zooms as street names take over.
+const NEIGHBORHOOD_LABEL_FADE = [8, 11];
+
+// Street names appear once zoomed this far, by tier: highways, major roads, local streets.
+const STREET_LABEL_ZOOMS = [3, 5, 9];
+const STREET_LABEL_MAX = 150;
+const STREET_LABEL_FONT = '12px "IBM Plex Sans Condensed", sans-serif';
+const STREET_LABEL_COLOR = "#c4c4c4";
+const STREET_LABEL_HALF_HEIGHT = 7;
+// Room left along the street past each end of a name, so it doesn't run off a bend.
+const STREET_LABEL_ROOM = 8;
+// The closest the same name repeats, in pixels.
+const STREET_NAME_REPEAT = 240;
+
+interface ScreenBox {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+const overlapsAny = (box: ScreenBox, placed: ScreenBox[]) =>
+  placed.some(
+    (other) =>
+      box.left < other.right &&
+      box.right > other.left &&
+      box.top < other.bottom &&
+      box.bottom > other.top,
+  );
 
 interface Label {
   lines: string[];
@@ -85,6 +114,11 @@ export class MapView {
   private boroughs: Path2D;
   private neighborhoods: Path2D;
   private labels: Label[];
+  private streets: Streets | null = null;
+  private showStreets = true;
+  private showNeighborhoods = false;
+  /** Each street name's width, measured when first drawn. Negative until then. */
+  private streetNameWidths = new Float32Array(0);
 
   constructor(
     plot: HTMLElement,
@@ -109,7 +143,7 @@ export class MapView {
       width: 0,
     }));
 
-    this.view = new PanZoom(plot, -1, (camera) => {
+    this.view = new PanZoom(plot, -1, MAP_MAX_ZOOM, (camera) => {
       renderer.setCamera(camera);
       this.requestDraw();
       onMovedChange(!isHome(camera));
@@ -117,6 +151,7 @@ export class MapView {
     // Label widths depend on the web font.
     void document.fonts.ready.then(() => {
       this.measureLabels();
+      this.streetNameWidths.fill(-1);
       this.requestDraw();
     });
   }
@@ -138,6 +173,22 @@ export class MapView {
 
   setArea(area: Area) {
     this.area = area;
+    this.requestDraw();
+  }
+
+  setStreets(streets: Streets) {
+    this.streets = streets;
+    this.streetNameWidths = new Float32Array(streets.names.length).fill(-1);
+    this.requestDraw();
+  }
+
+  setStreetsVisible(isVisible: boolean) {
+    this.showStreets = isVisible;
+    this.requestDraw();
+  }
+
+  setNeighborhoodsVisible(isVisible: boolean) {
+    this.showNeighborhoods = isVisible;
     this.requestDraw();
   }
 
@@ -207,7 +258,7 @@ export class MapView {
       0,
       1,
     );
-    if (fade > 0) {
+    if (fade > 0 && this.showNeighborhoods) {
       context.strokeStyle = `rgb(255 255 255 / ${fade * NEIGHBORHOOD_OPACITY})`;
       context.lineWidth = NEIGHBORHOOD_LINE_WIDTH / scale;
       context.stroke(this.neighborhoods);
@@ -217,7 +268,22 @@ export class MapView {
     context.stroke(this.boroughs);
 
     context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-    if (this.showLabels && camera.zoom >= LABEL_MIN_ZOOM) this.drawLabels(toScreenX, toScreenY, scale, aspect);
+    if (this.showLabels) {
+      // Labels placed earlier keep their space, so neighborhoods come before streets.
+      const placed: ScreenBox[] = [];
+      const neighborhoodOpacity =
+        1 -
+        clamp(
+          (camera.zoom - NEIGHBORHOOD_LABEL_FADE[0]!) /
+            (NEIGHBORHOOD_LABEL_FADE[1]! - NEIGHBORHOOD_LABEL_FADE[0]!),
+          0,
+          1,
+        );
+      if (this.showNeighborhoods && camera.zoom >= LABEL_MIN_ZOOM && neighborhoodOpacity > 0) {
+        this.drawLabels(toScreenX, toScreenY, scale, aspect, placed, neighborhoodOpacity);
+      }
+      if (this.streets && this.showStreets) this.drawStreetLabels(toScreenX, toScreenY, scale, placed);
+    }
     this.drawBox(toScreenX, toScreenY);
   }
 
@@ -227,9 +293,13 @@ export class MapView {
     toScreenY: (y: number) => number,
     scale: number,
     aspect: number,
+    placed: ScreenBox[],
+    opacity: number,
   ) {
     const { context, width, height } = this;
-    const placed: { left: number; right: number; top: number; bottom: number }[] = [];
+    // Fading labels stop holding their space halfway out, so street names can move in.
+    const ownSpace: ScreenBox[] = [];
+    context.globalAlpha = opacity;
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.lineJoin = "round";
@@ -250,15 +320,9 @@ export class MapView {
         bottom: y + halfHeight,
       };
       if (box.right < 0 || box.left > width || box.bottom < 0 || box.top > height) continue;
-      const overlaps = placed.some(
-        (other) =>
-          box.left < other.right &&
-          box.right > other.left &&
-          box.top < other.bottom &&
-          box.bottom > other.top,
-      );
-      if (overlaps) continue;
-      placed.push(box);
+      if (overlapsAny(box, ownSpace)) continue;
+      ownSpace.push(box);
+      if (opacity >= 0.5) placed.push(box);
 
       context.font = label.font;
       label.lines.forEach((line, index) => {
@@ -267,6 +331,86 @@ export class MapView {
         context.fillText(line, x, lineY);
       });
     }
+    context.globalAlpha = 1;
+  }
+
+  /**
+   * Names streets along their direction. Spots come most important first, and a name
+   * is skipped if it won't fit its stretch of street, would overlap a label already
+   * placed, or would repeat too close to the same name.
+   */
+  private drawStreetLabels(
+    toScreenX: (x: number) => number,
+    toScreenY: (y: number) => number,
+    scale: number,
+    placed: ScreenBox[],
+  ) {
+    const { context, width, height, fill, pixelRatio, streetNameWidths } = this;
+    const { anchors, reach, anchorCount, names } = this.streets!;
+    const { zoom } = this.view.camera;
+    const xScale = (width * fill[0] * zoom) / GRID_MAX;
+    const yScale = scale / GRID_MAX;
+    const shownByName = new Map<number, { x: number; y: number }[]>();
+    let count = 0;
+
+    context.font = STREET_LABEL_FONT;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.lineJoin = "round";
+    context.lineWidth = 3;
+    context.strokeStyle = "rgb(0 0 0 / 80%)";
+    context.fillStyle = STREET_LABEL_COLOR;
+
+    for (let index = 0; index < anchorCount && count < STREET_LABEL_MAX; index += 1) {
+      const tier = anchors[index * 4 + 3]!;
+      // Spots run in tier order, so the rest are too far out as well.
+      if (zoom < STREET_LABEL_ZOOMS[tier - 1]!) break;
+      const x = toScreenX(anchors[index * 4]! / GRID_MAX);
+      const y = toScreenY(anchors[index * 4 + 1]! / GRID_MAX);
+      if (x < -200 || x > width + 200 || y < -200 || y > height + 200) continue;
+
+      const reachX = reach[index * 2]! * xScale;
+      const reachY = -reach[index * 2 + 1]! * yScale;
+      const name = anchors[index * 4 + 2]!;
+      let textWidth = streetNameWidths[name]!;
+      if (textWidth < 0) {
+        textWidth = context.measureText(names[name]!).width;
+        streetNameWidths[name] = textWidth;
+      }
+      if (textWidth + 2 * STREET_LABEL_ROOM > 2 * Math.hypot(reachX, reachY)) continue;
+
+      // Turned to run along the street, but never upside down.
+      let angle = Math.atan2(reachY, reachX);
+      if (angle > Math.PI / 2) angle -= Math.PI;
+      else if (angle < -Math.PI / 2) angle += Math.PI;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const halfWidth = textWidth / 2 + LABEL_GAP;
+      const halfHeight = STREET_LABEL_HALF_HEIGHT + LABEL_GAP;
+      const spanX = halfWidth * Math.abs(cos) + halfHeight * Math.abs(sin);
+      const spanY = halfWidth * Math.abs(sin) + halfHeight * Math.abs(cos);
+      const box = { left: x - spanX, right: x + spanX, top: y - spanY, bottom: y + spanY };
+      if (box.right < 0 || box.left > width || box.bottom < 0 || box.top > height) continue;
+      if (overlapsAny(box, placed)) continue;
+      const shown = shownByName.get(name) ?? [];
+      if (shown.some((other) => Math.hypot(other.x - x, other.y - y) < STREET_NAME_REPEAT)) continue;
+
+      placed.push(box);
+      shown.push({ x, y });
+      shownByName.set(name, shown);
+      count += 1;
+      context.setTransform(
+        pixelRatio * cos,
+        pixelRatio * sin,
+        -pixelRatio * sin,
+        pixelRatio * cos,
+        pixelRatio * x,
+        pixelRatio * y,
+      );
+      context.strokeText(names[name]!, 0, 0);
+      context.fillText(names[name]!, 0, 0);
+    }
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   }
 
   private drawBox(toScreenX: (x: number) => number, toScreenY: (y: number) => number) {

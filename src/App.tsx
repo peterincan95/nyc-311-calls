@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { BoxOutline, clampShare, useBoxDraw, type Box } from "./box";
-import { loadCalls, type CallData } from "./data";
+import { loadCalls, loadStreets, type CallData } from "./data";
 import { ColumnMenu } from "./ColumnMenu";
 import {
   buildComplaintMenu,
@@ -12,7 +12,7 @@ import {
 } from "./filters";
 import { MapView } from "./mapView";
 import { HOME, isHome, PanZoom } from "./panZoom";
-import { CallRenderer, SCATTER_FILL_X, type Rect, type ScatterAxis } from "./renderer";
+import { CallRenderer, SCATTER_FILL_X, SCATTER_MAX_ZOOM, type Rect, type ScatterAxis } from "./renderer";
 import { dateTicks, hourTicks, longitudeTicks } from "./scatterAxes";
 import {
   countCallsByDay,
@@ -206,12 +206,22 @@ function Explorer({ data }: { data: CallData }) {
       setIsMapMoved,
     );
     mapView.current = view;
-    const scatter = new PanZoom(scatterPlot.current!, 1, (camera) => {
+    const scatter = new PanZoom(scatterPlot.current!, 1, SCATTER_MAX_ZOOM, (camera) => {
       current.setScatterCamera(camera);
       setScatterCamera(camera);
     });
     scatterView.current = scatter;
     if (import.meta.env.DEV) Object.assign(window, { callRenderer: current, mapView: view });
+
+    // Streets come after the points, and the map works without them.
+    let isCurrent = true;
+    loadStreets()
+      .then((streets) => {
+        if (!isCurrent) return;
+        current.setStreets(streets);
+        view.setStreets(streets);
+      })
+      .catch((reason: unknown) => console.warn("Streets didn't load", reason));
 
     const updateLayout = () => {
       const bounds = stage.current!.getBoundingClientRect();
@@ -227,6 +237,7 @@ function Explorer({ data }: { data: CallData }) {
     updateLayout();
 
     return () => {
+      isCurrent = false;
       observer.disconnect();
       view.destroy();
       scatter.destroy();
@@ -248,6 +259,9 @@ function Explorer({ data }: { data: CallData }) {
 
   useLayoutEffect(() => {
     renderer.current?.setPointStyle(visuals);
+    renderer.current?.setStreetsVisible(visuals.streets);
+    mapView.current?.setStreetsVisible(visuals.streets);
+    mapView.current?.setNeighborhoodsVisible(visuals.neighborhoods);
   }, [visuals]);
 
   useEffect(() => {
