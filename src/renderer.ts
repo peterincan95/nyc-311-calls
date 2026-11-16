@@ -81,9 +81,10 @@ const ROUND_POINT_SIZE = 4;
 const POINT_WEIGHT = 0.3;
 const FULL_WEIGHT_COVERAGE = 0.6;
 const WEIGHT_FALLOFF = 0.95;
-const OUTSIDE_RANGE_WEIGHT = 0.16;
-// Share of their color the scatterplot's calls outside the date range lose.
-const OUTSIDE_RANGE_DESATURATION = 0.5;
+// Unselected calls: those outside the date range on the scatterplot, and outside the
+// box on the map. They're drawn this bright, and lose this share of their color.
+const UNSELECTED_WEIGHT = 0.16;
+const UNSELECTED_DESATURATION = 0.5;
 // A call's time of day is only exact to two seconds on the GPU.
 const TIME_MARGIN_SECONDS = 2;
 const NEAR_GLOW = 0.3;
@@ -118,7 +119,11 @@ uniform uint u_tagMask;
 uniform uint u_tagMatch;
 uniform vec4 u_area;
 uniform vec2 u_boroughHues[8];
+uniform float u_isOutside;
+uniform float u_fadeOutsideArea;
 flat out vec2 v_hue;
+flat out float v_fade;
+flat out float v_unselected;
 void main() {
   gl_PointSize = u_pointSize;
   v_hue = u_boroughHues[(a_tags >> ${BOROUGH_SHIFT}u) & 7u];
@@ -126,11 +131,14 @@ void main() {
   float second = mod(a_time - (isWinter ? 3600.0 : 0.0), ${SECONDS_PER_DAY}.0);
   bool outsideArea = any(lessThan(a_position, u_area.xy)) || any(greaterThan(a_position, u_area.zw))
     || second < u_timeRange.x || second > u_timeRange.y;
-  if ((a_tags & u_tagMask) != u_tagMatch || outsideArea) {
+  // The map fades calls outside the box instead of hiding them.
+  if ((a_tags & u_tagMask) != u_tagMatch || (outsideArea && u_fadeOutsideArea < 0.5)) {
     // Outside the clip volume, so the point is never drawn.
     gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
     return;
   }
+  v_fade = outsideArea ? ${UNSELECTED_WEIGHT} : 1.0;
+  v_unselected = outsideArea ? 1.0 : u_isOutside;
   vec2 point = vec2(
     mix(a_position.x, second / ${SECONDS_PER_DAY}.0, u_timeAsX),
     mix(a_position.y, a_time / u_timeSpan, u_timeAsY)
@@ -143,8 +151,9 @@ precision highp float;
 uniform float u_weight;
 uniform float u_pointSize;
 uniform float u_roundSize;
-uniform float u_isOutside;
 flat in vec2 v_hue;
+flat in float v_fade;
+flat in float v_unselected;
 out vec4 color;
 void main() {
   float coverage = 1.0;
@@ -153,9 +162,9 @@ void main() {
     coverage = 1.0 - smoothstep(1.0 - 2.0 / u_pointSize, 1.0, distance);
   }
   // Density in red, each point's borough hue as a direction in green and blue, and the
-  // density of calls outside the date range in alpha.
-  float weight = u_weight * coverage;
-  color = vec4(weight, weight * v_hue, weight * u_isOutside);
+  // density of unselected calls in alpha.
+  float weight = u_weight * coverage * v_fade;
+  color = vec4(weight, weight * v_hue, weight * v_unselected);
 }`;
 
 const FULLSCREEN_VERTEX = `#version 300 es
@@ -256,7 +265,7 @@ void main() {
   // Where boroughs meet, their hue directions blend.
   vec2 hue = core.gb + near.gb + far.gb;
   if (u_colorByBorough > 0.5 && length(hue) > 1e-5) rgb = hueRotate(rgb, atan(hue.y, hue.x));
-  // Grays by the share of the light that comes from calls outside the date range.
+  // Grays by the share of the light that comes from unselected calls.
   float outside = (core.a + near.a + far.a) / max(core.r + near.r + far.r, 1e-6);
   float gray = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
   rgb = mix(rgb, vec3(gray), clamp(outside, 0.0, 1.0) * u_outsideDesaturation);
@@ -472,6 +481,7 @@ export class CallRenderer {
         "u_roundSize",
         "u_boroughHues",
         "u_isOutside",
+        "u_fadeOutsideArea",
       ]),
       downsample: createProgram(gl, FULLSCREEN_VERTEX, DOWNSAMPLE_FRAGMENT, [
         "u_source",
@@ -582,7 +592,9 @@ export class CallRenderer {
       const scaleX = 2 * fill[0] * zoom;
       const scaleY = 2 * fill[1] * zoom;
       this.setProjection(scaleX, scaleY, -scaleX * x, -scaleY * y, 0, 0);
+      gl.uniform1f(points.uniforms.u_fadeOutsideArea!, 1);
       this.drawSlices(selection.inside, weight);
+      gl.uniform1f(points.uniforms.u_fadeOutsideArea!, 0);
     }
 
     if (drawScatter) {
@@ -600,7 +612,7 @@ export class CallRenderer {
       const scaleY = -2 * zoom;
       this.setProjection(scaleX, scaleY, -scaleX * x, -scaleY * y, timeAsX, 1);
       this.drawSlices(selection.inside, weight);
-      this.drawSlices(selection.outside, weight * OUTSIDE_RANGE_WEIGHT, true);
+      this.drawSlices(selection.outside, weight * UNSELECTED_WEIGHT, true);
     }
 
     gl.disable(gl.BLEND);
@@ -724,7 +736,7 @@ export class CallRenderer {
     gl.uniform1f(composite.uniforms.u_nearGlow!, NEAR_GLOW);
     gl.uniform1f(composite.uniforms.u_farGlow!, FAR_GLOW);
     gl.uniform1f(composite.uniforms.u_colorByBorough!, this.colorByBorough ? 1 : 0);
-    gl.uniform1f(composite.uniforms.u_outsideDesaturation!, OUTSIDE_RANGE_DESATURATION);
+    gl.uniform1f(composite.uniforms.u_outsideDesaturation!, UNSELECTED_DESATURATION);
     pass(null);
     gl.activeTexture(gl.TEXTURE0);
   }
