@@ -108,16 +108,20 @@ const TIME_MARGIN_SECONDS = 2;
 const NEAR_GLOW = 0.3;
 const FAR_GLOW = 0.75;
 
-// The opacity slider scales brightness by up to this factor either way from its middle.
+// Each opacity slider scales its plot's brightness by up to this factor either way from its middle.
 const MAX_OPACITY_SCALE = 8;
+// The map's default brightness, a step down from the scatterplot's: what 40% on its
+// slider used to give.
+const MAP_DEFAULT_OPACITY_SCALE = MAX_OPACITY_SCALE ** -0.2;
 // Coloring by borough turns each borough's colors this far around the color wheel, by
 // borough id. Unknown boroughs keep the usual colors.
 const BOROUGH_HUE_DEGREES = [0, 28, 72, 144, 216, 288, 0, 0];
 
 /** How points are drawn, from the visualization options. */
 export interface PointStyle {
-  /** 0 to 100, where 50 leaves the brightness the app picks. */
-  opacity: number;
+  /** 0 to 100 for each plot, where 50 leaves the brightness the app picks. */
+  mapOpacity: number;
+  chartOpacity: number;
   colorByBorough: boolean;
 }
 
@@ -394,7 +398,8 @@ export class CallRenderer {
   private needsMapDraw = true;
   private needsScatterDraw = true;
   private scatterAxis: ScatterAxis = "longitude";
-  private opacityScale = 1;
+  private mapOpacityScale = MAP_DEFAULT_OPACITY_SCALE;
+  private scatterOpacityScale = 1;
   private colorByBorough = false;
   private streets: Streets | null = null;
   private streetLines: StreetLines | null = null;
@@ -449,8 +454,10 @@ export class CallRenderer {
     this.requestDraw();
   }
 
-  setPointStyle({ opacity, colorByBorough }: PointStyle) {
-    this.opacityScale = MAX_OPACITY_SCALE ** ((opacity - 50) / 50);
+  setPointStyle({ mapOpacity, chartOpacity, colorByBorough }: PointStyle) {
+    const toScale = (opacity: number) => MAX_OPACITY_SCALE ** ((opacity - 50) / 50);
+    this.mapOpacityScale = toScale(mapOpacity) * MAP_DEFAULT_OPACITY_SCALE;
+    this.scatterOpacityScale = toScale(chartOpacity);
     this.colorByBorough = colorByBorough;
     this.requestDraw();
   }
@@ -718,7 +725,7 @@ export class CallRenderer {
         MAP_MAX_ZOOM,
         MAP_ZOOM_BRIGHTNESS,
         shrink,
-      );
+      ) * this.mapOpacityScale;
       const scaleX = 2 * fill[0] * zoom;
       const scaleY = 2 * fill[1] * zoom;
       this.setProjection(scaleX, scaleY, -scaleX * x, -scaleY * y, 0, 0);
@@ -737,7 +744,7 @@ export class CallRenderer {
         zoom,
         SCATTER_MAX_ZOOM,
         SCATTER_ZOOM_BRIGHTNESS,
-      );
+      ) * this.scatterOpacityScale;
       const timeAsX = this.scatterAxis === "time" ? 1 : 0;
       const scaleX = 2 * SCATTER_FILL_X * zoom;
       // A negative scale runs time downward, with the oldest calls at the top.
@@ -773,7 +780,7 @@ export class CallRenderer {
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.uniform1f(this.resources!.points.uniforms.u_pointSize!, pointSize);
     const weight = baseWeight * (1 + zoomBrightness * Math.log2(zoom) * roominess);
-    return weight * this.opacityScale;
+    return weight;
   }
 
   private devicePointSize(growth: number, shrinkPixels = 0) {

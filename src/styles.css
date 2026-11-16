@@ -603,6 +603,8 @@ body,
 .box-bar {
   position: absolute;
   top: 12px;
+  /* Wraps before it reaches the opacity slider. */
+  right: 240px;
   left: 24px;
   display: flex;
   flex-wrap: wrap;
@@ -659,16 +661,6 @@ body,
   box-shadow: 0 8px 24px rgb(0 0 0 / 60%);
 }
 
-.visual-row {
-  display: flex;
-  justify-content: space-between;
-}
-
-.visual-row output {
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-
 .visual-slider {
   width: 100%;
   margin: 0;
@@ -723,10 +715,35 @@ body,
   transform: translateX(16px);
 }
 
-.box-bar .visual-reset {
-  align-self: flex-start;
-  margin-bottom: 6px;
-  background: none;
+/* Each plot's opacity slider, always in view. */
+.opacity-control {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 4px 0 14px;
+  border: 1px solid #444;
+  border-radius: 16px;
+  color: var(--text-soft);
+  font-size: 13px;
+  background: var(--background);
+  pointer-events: auto;
+}
+
+.opacity-control .visual-slider {
+  width: 96px;
+}
+
+.pill.opacity-reset {
+  width: 26px;
+  min-height: 24px;
+  border-color: transparent;
+}
+
+.map-opacity {
+  position: absolute;
+  top: 12px;
+  right: 24px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -753,11 +770,19 @@ body,
   inset: 16px 24px 52px var(--month-column);
 }
 
-.pill.scatter-reset {
+.scatter-tools {
   position: absolute;
   top: 24px;
   right: 32px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none;
+}
+
+.scatter-tools .pill {
   background: var(--background);
+  pointer-events: auto;
 }
 
 .month {
@@ -1174,6 +1199,20 @@ body,
     top: 8px;
     left: 16px;
     font-size: 12px;
+  }
+
+  .box-bar {
+    right: 16px;
+  }
+
+  /* Too cramped on phones, so points keep the app's opacity. */
+  .opacity-control {
+    display: none;
+  }
+
+  .scatter-tools {
+    top: 8px;
+    right: 16px;
   }
 
   .sentence {

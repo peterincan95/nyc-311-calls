@@ -1,15 +1,18 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { DEFAULT_OPACITY } from "./OpacitySlider";
 
 export interface Visuals {
-  /** 0 to 100, where 50 leaves the brightness the app picks. */
-  opacity: number;
+  /** 0 to 100 for each plot, where 50 leaves the brightness the app picks. */
+  mapOpacity: number;
+  chartOpacity: number;
   colorByBorough: boolean;
   streets: boolean;
   neighborhoods: boolean;
 }
 
 export const DEFAULT_VISUALS: Visuals = {
-  opacity: 50,
+  mapOpacity: DEFAULT_OPACITY,
+  chartOpacity: DEFAULT_OPACITY,
   colorByBorough: false,
   streets: true,
   neighborhoods: false,
@@ -20,7 +23,7 @@ interface VisualOptionsProps {
   onChange: (visuals: Visuals) => void;
 }
 
-/** A button on the map that opens a small menu of options for how points are drawn. */
+/** A button on the map that opens a small menu of options for what the plots show. */
 export function VisualOptions({ visuals, onChange }: VisualOptionsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -64,34 +67,6 @@ export function VisualOptions({ visuals, onChange }: VisualOptionsProps) {
 
       {isOpen && (
         <div className="visual-menu" id={`${id}-menu`} role="group" aria-label="Visualization options">
-          <div className="visual-row">
-            <label htmlFor={`${id}-opacity`}>Point opacity</label>
-            <output htmlFor={`${id}-opacity`}>{visuals.opacity}%</output>
-          </div>
-          <input
-            type="range"
-            className="visual-slider"
-            id={`${id}-opacity`}
-            min={0}
-            max={100}
-            step={1}
-            value={visuals.opacity}
-            aria-valuetext={
-              visuals.opacity === DEFAULT_VISUALS.opacity ? "50%, the default" : `${visuals.opacity}%`
-            }
-            onChange={(event) => onChange({ ...visuals, opacity: Number(event.target.value) })}
-          />
-          {/* Sits with the slider, since it only resets the opacity. */}
-          <button
-            type="button"
-            className="pill visual-reset"
-            aria-label="Reset point opacity"
-            disabled={visuals.opacity === DEFAULT_VISUALS.opacity}
-            onClick={() => onChange({ ...visuals, opacity: DEFAULT_VISUALS.opacity })}
-          >
-            Reset
-          </button>
-
           <button
             type="button"
             className="visual-switch"
