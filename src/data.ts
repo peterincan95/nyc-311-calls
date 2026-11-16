@@ -127,3 +127,49 @@ export async function loadCalls(onProgress: (fraction: number) => void): Promise
     tags: new Uint32Array(tags.buffer),
   };
 }
+
+/** Street centerlines on the calls' grid, from scripts/build_streets.py. */
+export interface Streets {
+  /** Index of each line's first vertex, with one more entry for the end. Lines run in tier order. */
+  lineStarts: Uint32Array;
+  /** x, y pairs on the grid. */
+  vertices: Uint16Array;
+  /** Lines in tiers 1 (highways), 2 (major roads) and 3 (local streets). */
+  tierLineCounts: number[];
+  /** Label spots, most important first, as x, y, name index and tier. */
+  anchors: Uint16Array;
+  /** Half of each label spot's chord along its street, as x and y on the grid. */
+  reach: Int16Array;
+  anchorCount: number;
+  names: string[];
+}
+
+interface StreetsHeader {
+  lineCount: number;
+  vertexCount: number;
+  anchorCount: number;
+  tierLineCounts: number[];
+  names: string[];
+}
+
+/** Loaded after the calls, since the map works without it. */
+export async function loadStreets(): Promise<Streets> {
+  const [header, buffer] = await Promise.all([
+    fetchOk("streets.json").then((response) => response.json() as Promise<StreetsHeader>),
+    fetchOk("streets.bin").then((response) => response.arrayBuffer()),
+  ]);
+  const { lineCount, vertexCount, anchorCount, tierLineCounts, names } = header;
+  // Each section starts on a 4-byte boundary.
+  let offset = 0;
+  const take = <T>(make: (start: number) => T, bytes: number) => {
+    const view = make(offset);
+    offset += Math.ceil(bytes / 4) * 4;
+    return view;
+  };
+  const lineStarts = take((start) => new Uint32Array(buffer, start, lineCount + 1), (lineCount + 1) * 4);
+  const vertices = take((start) => new Uint16Array(buffer, start, vertexCount * 2), vertexCount * 4);
+  const anchors = take((start) => new Uint16Array(buffer, start, anchorCount * 4), anchorCount * 8);
+  const reach = take((start) => new Int16Array(buffer, start, anchorCount * 2), anchorCount * 4);
+  if (offset !== buffer.byteLength) throw new Error("streets.bin doesn't match streets.json");
+  return { lineStarts, vertices, tierLineCounts, anchors, reach, anchorCount, names };
+}
