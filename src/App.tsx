@@ -30,6 +30,7 @@ import {
 import { SummaryPanel, type SummaryRow } from "./SummaryPanel";
 import { Timeline, type DayRange } from "./Timeline";
 import { DEFAULT_VISUALS, VisualOptions, type Visuals } from "./VisualOptions";
+import { OpacitySlider } from "./OpacitySlider";
 
 const ANNOUNCE_DELAY_MS = 600;
 const SCATTER_FILL = [SCATTER_FILL_X, 1] as const;
@@ -413,6 +414,12 @@ function Explorer({ data }: { data: CallData }) {
             {mapDraw.draft && <BoxOutline box={mapDraw.draft} draft />}
           </div>
           {emptyMessage && <p className="empty">{emptyMessage}</p>}
+          <OpacitySlider
+            className="map-opacity"
+            plotName="Map"
+            value={visuals.mapOpacity}
+            onChange={(mapOpacity) => setVisuals({ ...visuals, mapOpacity })}
+          />
           <div className="box-bar">
             <VisualOptions visuals={visuals} onChange={setVisuals} />
             <button
@@ -473,15 +480,22 @@ function Explorer({ data }: { data: CallData }) {
               {scatterDraw.draft && <BoxOutline box={scatterDraw.draft} draft />}
             </div>
           </div>
-          {!isHome(scatterCamera) && (
-            <button
-              className="pill scatter-reset"
-              type="button"
-              onClick={() => scatterView.current?.reset()}
-            >
-              Reset view
-            </button>
-          )}
+          <div className="scatter-tools">
+            {!isHome(scatterCamera) && (
+              <button
+                className="pill"
+                type="button"
+                onClick={() => scatterView.current?.reset()}
+              >
+                Reset view
+              </button>
+            )}
+            <OpacitySlider
+              plotName="Chart"
+              value={visuals.chartOpacity}
+              onChange={(chartOpacity) => setVisuals({ ...visuals, chartOpacity })}
+            />
+          </div>
           <div className="x-axis">
             {xTicks
               .filter(({ share }) => isOnPlot(toPlotX(share)))
