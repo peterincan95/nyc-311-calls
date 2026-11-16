@@ -1,4 +1,4 @@
-import { BOROUGH_SHIFT, BYTES_PER_CALL, type CallData, type Meta } from "./data";
+import { BOROUGH_SHIFT, BYTES_PER_CALL, type CallData, type Meta, type Streets } from "./data";
 import { GRID_MAX, SECONDS_PER_DAY, winterTime, type Selection, type Slice } from "./selection";
 
 /** The map's view: `x` and `y` are the share of the city at the panel's center. */
@@ -37,12 +37,22 @@ interface Resources {
   downsample: Program;
   blur: Program;
   composite: Program;
+  streets: Program;
   pointsVao: WebGLVertexArrayObject;
   emptyVao: WebGLVertexArrayObject;
 }
 
+/** Street lines uploaded as pairs of vertices, one pair per line segment. */
+interface StreetLines {
+  vao: WebGLVertexArrayObject;
+  buffer: WebGLBuffer;
+  /** Vertices up to the end of each tier. */
+  tierEnds: number[];
+}
+
 interface Targets {
   density: Target;
+  streets: Target;
   nearA: Target;
   nearB: Target;
   farA: Target;
@@ -59,11 +69,11 @@ export const SCATTER_FILL_X = 0.96;
 
 // Width of a point in CSS pixels, rounded to whole device pixels when drawn.
 const POINT_SIZE = 1.7;
-// The closest the map and scatterplot zoom in.
-export const MAX_ZOOM = 18;
-// Points grow with zoom, reaching this multiple of their size at MAX_ZOOM.
+// The closest each panel zooms in. The map goes down to a few city blocks.
+export const MAP_MAX_ZOOM = 64;
+export const SCATTER_MAX_ZOOM = 18;
+// Points grow with zoom, reaching this multiple of their size at their panel's closest zoom.
 const MAX_ZOOM_GROWTH = 3.46;
-const ZOOM_GROWTH_POWER = Math.log(MAX_ZOOM_GROWTH) / Math.log(MAX_ZOOM);
 // Points on the zoomed-out map are this many device pixels smaller, reaching full size
 // by MAP_FULL_SIZE_ZOOM. Sizes round to whole device pixels, so a share of the size
 // would vanish on some screens.
@@ -72,6 +82,14 @@ const MAP_FULL_SIZE_ZOOM = 2;
 // Added to a point's brightness for each doubling of zoom. The scatterplot has no
 // empty streets or parks to set points off, so a lot of brightness washes it out.
 const MAP_ZOOM_BRIGHTNESS = 0.9;
+
+// Street lines show under the points, in gray, by tier: highways, major roads and
+// local streets. Each fades in between two zooms, up to its brightness.
+const STREET_TIERS = [
+  { brightness: 0.26, fade: [0, 1] },
+  { brightness: 0.2, fade: [2, 3.5] },
+  { brightness: 0.15, fade: [4, 6] },
+];
 const SCATTER_ZOOM_BRIGHTNESS = 0;
 // Points this many device pixels wide or more are drawn round.
 const ROUND_POINT_SIZE = 4;
@@ -229,6 +247,7 @@ in vec2 v_uv;
 uniform sampler2D u_density;
 uniform sampler2D u_near;
 uniform sampler2D u_far;
+uniform sampler2D u_streets;
 uniform float u_nearGlow;
 uniform float u_farGlow;
 uniform float u_colorByBorough;
@@ -269,7 +288,25 @@ void main() {
   float outside = (core.a + near.a + far.a) / max(core.r + near.r + far.r, 1e-6);
   float gray = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
   rgb = mix(rgb, vec3(gray), clamp(outside, 0.0, 1.0) * u_outsideDesaturation);
+  // Streets show where the points are dimmer than they are.
+  rgb = max(rgb, vec3(texture(u_streets, v_uv).r));
   color = vec4(rgb, 1.0);
+}`;
+
+const STREET_VERTEX = `#version 300 es
+layout(location = 0) in vec2 a_position;
+uniform vec2 u_scale;
+uniform vec2 u_offset;
+void main() {
+  gl_Position = vec4(a_position * u_scale + u_offset, 0.0, 1.0);
+}`;
+
+const STREET_FRAGMENT = `#version 300 es
+precision mediump float;
+uniform float u_brightness;
+out vec4 color;
+void main() {
+  color = vec4(u_brightness);
 }`;
 
 /** The share of the map panel's width and height the city fills, keeping it undistorted. */
@@ -314,10 +351,15 @@ function createProgram(
   return { program, uniforms };
 }
 
-function createTarget(gl: WebGL2RenderingContext, width: number, height: number): Target {
+function createTarget(
+  gl: WebGL2RenderingContext,
+  width: number,
+  height: number,
+  format: number = gl.RGBA16F,
+): Target {
   const texture = gl.createTexture()!;
   gl.bindTexture(gl.TEXTURE_2D, texture);
-  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, width, height);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, format, width, height);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -354,6 +396,9 @@ export class CallRenderer {
   private scatterAxis: ScatterAxis = "longitude";
   private opacityScale = 1;
   private colorByBorough = false;
+  private streets: Streets | null = null;
+  private streetLines: StreetLines | null = null;
+  private showStreets = true;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -410,6 +455,17 @@ export class CallRenderer {
     this.requestDraw();
   }
 
+  setStreets(streets: Streets) {
+    this.streets = streets;
+    this.uploadStreets();
+    this.requestDraw(true, false);
+  }
+
+  setStreetsVisible(isVisible: boolean) {
+    this.showStreets = isVisible;
+    this.requestDraw(true, false);
+  }
+
   /** Only the map changes, so the scatterplot can keep what it last drew. */
   setCamera(camera: Camera) {
     this.camera = camera;
@@ -442,6 +498,8 @@ export class CallRenderer {
   private onContextRestored = () => {
     this.createResources();
     this.createTargets();
+    this.streetLines = null;
+    this.uploadStreets();
     this.requestDraw();
   };
 
@@ -497,8 +555,14 @@ export class CallRenderer {
         "u_farGlow",
         "u_colorByBorough",
         "u_outsideDesaturation",
+        "u_streets",
       ]),
       pointsVao,
+      streets: createProgram(gl, STREET_VERTEX, STREET_FRAGMENT, [
+        "u_scale",
+        "u_offset",
+        "u_brightness",
+      ]),
       emptyVao: gl.createVertexArray()!,
     };
   }
@@ -515,11 +579,76 @@ export class CallRenderer {
       ] as const;
     this.targets = {
       density: createTarget(gl, canvas.width, canvas.height),
+      streets: createTarget(gl, canvas.width, canvas.height, gl.R8),
       nearA: createTarget(gl, ...size(4)),
       nearB: createTarget(gl, ...size(4)),
       farA: createTarget(gl, ...size(16)),
       farB: createTarget(gl, ...size(16)),
     };
+  }
+
+  /** Turns each street's run of vertices into separate segments, so one call draws a tier. */
+  private uploadStreets() {
+    const { gl, streets } = this;
+    if (!streets || !this.resources || this.streetLines) return;
+    const { lineStarts, vertices, tierLineCounts } = streets;
+    const segments = new Uint16Array((vertices.length / 2 - lineStarts.length + 1) * 4);
+    const tierEnds: number[] = [];
+    let line = 0;
+    let written = 0;
+    for (const count of tierLineCounts) {
+      for (const last = line + count; line < last; line += 1) {
+        for (let vertex = lineStarts[line]!; vertex < lineStarts[line + 1]! - 1; vertex += 1) {
+          segments.set(vertices.subarray(vertex * 2, vertex * 2 + 4), written);
+          written += 4;
+        }
+      }
+      tierEnds.push(written / 2);
+    }
+
+    const vao = gl.createVertexArray()!;
+    gl.bindVertexArray(vao);
+    const buffer = gl.createBuffer()!;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, segments.subarray(0, written), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.UNSIGNED_SHORT, true, 0, 0);
+    gl.bindVertexArray(null);
+    this.streetLines = { vao, buffer, tierEnds };
+  }
+
+  /** Draws the map's streets into their own buffer, which the composite lays under the points. */
+  private drawStreets(
+    resources: Resources,
+    targets: Targets,
+    map: Rect,
+    zoom: number,
+    projection: [number, number, number, number],
+  ) {
+    const { gl, streetLines } = this;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, targets.streets.framebuffer);
+    this.setPanel(map);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    if (streetLines && this.showStreets) {
+      const { streets } = resources;
+      gl.useProgram(streets.program);
+      gl.bindVertexArray(streetLines.vao);
+      gl.uniform2f(streets.uniforms.u_scale!, projection[0], projection[1]);
+      gl.uniform2f(streets.uniforms.u_offset!, projection[2], projection[3]);
+      // Where streets cross, the brighter one shows rather than the two adding up.
+      gl.blendEquation(gl.MAX);
+      STREET_TIERS.forEach(({ brightness, fade: [from, to] }, tier) => {
+        const shown = Math.min(1, Math.max(0, (zoom - from!) / (to! - from!)));
+        if (shown === 0) return;
+        const first = tier === 0 ? 0 : streetLines.tierEnds[tier - 1]!;
+        gl.uniform1f(streets.uniforms.u_brightness!, brightness * shown);
+        gl.drawArrays(gl.LINES, first, streetLines.tierEnds[tier]! - first);
+      });
+      gl.blendEquation(gl.FUNC_ADD);
+      gl.useProgram(resources.points.program);
+      gl.bindVertexArray(resources.pointsVao);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, targets.density.framebuffer);
   }
 
   private requestDraw(needsMap = true, needsScatter = true) {
@@ -586,6 +715,7 @@ export class CallRenderer {
         map,
         filled,
         zoom,
+        MAP_MAX_ZOOM,
         MAP_ZOOM_BRIGHTNESS,
         shrink,
       );
@@ -595,6 +725,7 @@ export class CallRenderer {
       gl.uniform1f(points.uniforms.u_fadeOutsideArea!, 1);
       this.drawSlices(selection.inside, weight);
       gl.uniform1f(points.uniforms.u_fadeOutsideArea!, 0);
+      this.drawStreets(resources, targets, map, zoom, [scaleX, scaleY, -scaleX * x, -scaleY * y]);
     }
 
     if (drawScatter) {
@@ -604,6 +735,7 @@ export class CallRenderer {
         scatter,
         SCATTER_FILL_X,
         zoom,
+        SCATTER_MAX_ZOOM,
         SCATTER_ZOOM_BRIGHTNESS,
       );
       const timeAsX = this.scatterAxis === "time" ? 1 : 0;
@@ -626,11 +758,12 @@ export class CallRenderer {
     rect: Rect,
     filled: number,
     zoom: number,
+    maxZoom: number,
     zoomBrightness: number,
     shrinkPixels = 0,
   ) {
     const { gl } = this;
-    const growth = Math.min(zoom ** ZOOM_GROWTH_POWER, MAX_ZOOM_GROWTH);
+    const growth = Math.min(zoom ** (Math.log(MAX_ZOOM_GROWTH) / Math.log(maxZoom)), MAX_ZOOM_GROWTH);
     const pointSize = this.devicePointSize(growth, shrinkPixels);
     const baseWeight = this.pointWeight(selection, pointSize, rect, filled * zoom ** 2);
     // Crowded views get less of the boost, so dense blocks don't merge into a haze.
@@ -730,9 +863,12 @@ export class CallRenderer {
     gl.bindTexture(gl.TEXTURE_2D, targets.nearA.texture);
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, targets.farA.texture);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, targets.streets.texture);
     gl.uniform1i(composite.uniforms.u_density!, 0);
     gl.uniform1i(composite.uniforms.u_near!, 1);
     gl.uniform1i(composite.uniforms.u_far!, 2);
+    gl.uniform1i(composite.uniforms.u_streets!, 3);
     gl.uniform1f(composite.uniforms.u_nearGlow!, NEAR_GLOW);
     gl.uniform1f(composite.uniforms.u_farGlow!, FAR_GLOW);
     gl.uniform1f(composite.uniforms.u_colorByBorough!, this.colorByBorough ? 1 : 0);

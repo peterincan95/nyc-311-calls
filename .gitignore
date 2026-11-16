@@ -1,5 +1,6 @@
 # Source data is too large for GitHub. See the README to rebuild it.
 data/*.csv
+data/GeoJSON/Centerline*.geojson
 *.csv.tmp
 
 node_modules/
