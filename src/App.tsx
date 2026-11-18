@@ -557,7 +557,7 @@ function Explorer({ data }: { data: CallData }) {
                 </span>
               ))}
             {isWeekView && weekCounts && (
-              <WeekGrid counts={weekCounts} area={area} onPick={pickCell} />
+              <WeekGrid counts={weekCounts} area={area} gradient={visuals.gradient} onPick={pickCell} />
             )}
             <div className="plot-clip">
               {!isWeekView &&
@@ -626,6 +626,7 @@ function Explorer({ data }: { data: CallData }) {
         startHandle={startHandle}
         isOpen={isTimelineOpen}
         onToggle={setIsTimelineOpen}
+        chartColor={visuals.gradient.at(-2)!}
       />
 
       <SummaryPanel

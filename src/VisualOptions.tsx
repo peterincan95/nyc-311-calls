@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { DEFAULT_OPACITY } from "./OpacitySlider";
+import { DEFAULT_GRADIENT, gradientStops } from "./renderer";
 
 export interface Visuals {
   /** 0 to 100 for each plot, where 50 leaves the brightness the app picks. */
@@ -8,6 +9,8 @@ export interface Visuals {
   colorByBorough: boolean;
   streets: boolean;
   neighborhoods: boolean;
+  /** The points' gradient colors after black, from the sparsest areas to the densest. */
+  gradient: readonly string[];
 }
 
 export const DEFAULT_VISUALS: Visuals = {
@@ -16,7 +19,11 @@ export const DEFAULT_VISUALS: Visuals = {
   colorByBorough: false,
   streets: true,
   neighborhoods: false,
+  gradient: DEFAULT_GRADIENT,
 };
+
+const isDefaultGradient = (gradient: readonly string[]) =>
+  gradient.every((color, index) => color === DEFAULT_GRADIENT[index]);
 
 interface VisualOptionsProps {
   visuals: Visuals;
@@ -105,6 +112,50 @@ export function VisualOptions({ visuals, onChange }: VisualOptionsProps) {
               <span className="switch-thumb" />
             </span>
           </button>
+
+          <div className="gradient-editor" role="group" aria-labelledby={`${id}-gradient`}>
+            <div className="gradient-heading">
+              <span id={`${id}-gradient`}>Gradient</span>
+              <button
+                type="button"
+                className="pill pill-icon gradient-reset"
+                aria-label="Reset gradient colors"
+                title="Reset colors"
+                disabled={isDefaultGradient(visuals.gradient)}
+                onClick={() => onChange({ ...visuals, gradient: DEFAULT_GRADIENT })}
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M3.5 6.5a5 5 0 1 1-.2 3.2" />
+                  <path d="M3 2.5v4h4" />
+                </svg>
+              </button>
+            </div>
+            <div
+              className="gradient-preview"
+              style={{ background: `linear-gradient(to right, ${gradientStops(visuals.gradient).join(", ")})` }}
+            />
+            <div className="gradient-stops">
+              {visuals.gradient.map((color, index) => (
+                <label
+                  key={index}
+                  className="gradient-stop"
+                  style={{ left: `${((index + 1) / visuals.gradient.length) * 100}%`, background: color }}
+                  title={color}
+                >
+                  <input
+                    type="color"
+                    value={color}
+                    aria-label={`Gradient color ${index + 1} of ${visuals.gradient.length}`}
+                    onChange={(event) => {
+                      const gradient = [...visuals.gradient];
+                      gradient[index] = event.target.value;
+                      onChange({ ...visuals, gradient });
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
