@@ -19,8 +19,11 @@ const MIN_DRAG_PIXELS = 4;
 
 export const clampShare = (share: number) => Math.min(1, Math.max(0, share));
 
-/** Lets the user drag out a box on a plot. Escape abandons the drag. */
-export function useBoxDraw(onDraw: (box: Box) => void) {
+/**
+ * Lets the user drag out a box on a plot. Escape abandons the drag. `isAdding` is true
+ * when shift is held as the drag ends.
+ */
+export function useBoxDraw(onDraw: (box: Box, isAdding: boolean) => void) {
   const start = useRef<DragStart | null>(null);
   const [draft, setDraft] = useState<Box | null>(null);
 
@@ -74,7 +77,7 @@ export function useBoxDraw(onDraw: (box: Box) => void) {
       Math.abs(event.clientX - current.x),
       Math.abs(event.clientY - current.y),
     );
-    if (moved >= MIN_DRAG_PIXELS) onDraw(boxTo(event, current));
+    if (moved >= MIN_DRAG_PIXELS) onDraw(boxTo(event, current), event.shiftKey);
   };
 
   const onPointerCancel = (event: PointerEvent<HTMLElement>) => {

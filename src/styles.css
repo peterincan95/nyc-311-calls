@@ -767,7 +767,7 @@ body,
 }
 
 .scatter .plot {
-  inset: 16px 24px 52px var(--month-column);
+  inset: 16px 24px 64px var(--month-column);
 }
 
 .scatter-tools {
@@ -810,7 +810,8 @@ body,
   right: 24px;
   bottom: 8px;
   left: var(--month-column);
-  height: 44px;
+  /* Tall enough to leave a gap between the labels and the view menu under them. */
+  height: 56px;
   border-top: 1px solid #555;
   color: var(--text-soft);
   font-size: 13px;
@@ -848,26 +849,64 @@ body,
   line-height: 1;
 }
 
-.x-axis-title p {
-  margin: 0;
+/* The chart's view menu sits where the x axis title would. */
+.view-select {
+  min-height: 24px;
+  padding: 0 28px 0 12px;
+  border: 1px solid #666;
+  border-radius: 14px;
+  color: var(--text-soft);
+  font: inherit;
+  appearance: none;
+  background: var(--background)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23d8d8d8'/%3E%3C/svg%3E")
+    no-repeat right 11px center / 9px 6px;
+  cursor: pointer;
 }
 
-.pill.axis-toggle {
-  position: relative;
-  width: 30px;
-  min-height: 20px;
+.view-select:hover {
+  color: var(--text);
+  border-color: var(--text);
 }
 
-/* A bigger target than the button looks, for fingers. */
-.axis-toggle::after {
+.view-select:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.view-select option {
+  color: var(--text);
+  background: var(--menu);
+}
+
+/* Week grid */
+
+.panel .plot.week-plot {
+  cursor: pointer;
+}
+
+.week-grid {
   position: absolute;
-  inset: -8px;
-  content: "";
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(24, 1fr);
 }
 
-.pill.axis-toggle svg {
-  width: 14px;
-  height: 14px;
+.week-cell {
+  min-width: 0;
+  min-height: 0;
+}
+
+.week-cell:hover {
+  outline: 1px solid var(--text);
+  outline-offset: -1px;
+}
+
+/* Cells outside the pick, faded and desaturated like other unselected requests. */
+.week-cell.unpicked {
+  opacity: 0.3;
+  filter: saturate(0.5);
 }
 
 /* Timeline */
@@ -1278,7 +1317,7 @@ body,
   }
 
   .scatter .plot {
-    inset: 10px 16px 48px var(--month-column);
+    inset: 10px 16px 60px var(--month-column);
   }
 
   .month {
@@ -1288,7 +1327,7 @@ body,
 
   .x-axis {
     right: 16px;
-    height: 40px;
+    height: 52px;
     font-size: 11px;
   }
 
