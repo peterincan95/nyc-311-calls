@@ -1,8 +1,5 @@
 import { useMemo, useRef, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 import { monthName, type Month } from "./data";
-import { COLOR_STOPS } from "./renderer";
-
-const chartColor = COLOR_STOPS[COLOR_STOPS.length - 2];
 
 /** Indexes into the day list. The range covers `from` up to, but not including, `to`. */
 export type DayRange = [from: number, to: number];
@@ -36,6 +33,8 @@ interface TimelineProps {
   startHandle: RefObject<HTMLDivElement | null>;
   isOpen: boolean;
   onToggle: (isOpen: boolean) => void;
+  /** The color of the daily count chart. */
+  chartColor: string;
 }
 
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
@@ -81,6 +80,7 @@ export function Timeline({
   startHandle,
   isOpen,
   onToggle,
+  chartColor,
 }: TimelineProps) {
   const track = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);

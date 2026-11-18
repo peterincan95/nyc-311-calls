@@ -1,5 +1,5 @@
 import { useRef, type MouseEvent, type PointerEvent } from "react";
-import { COLOR_STOPS } from "./renderer";
+import { gradientStops, hexChannels } from "./renderer";
 import {
   DAYS_PER_WEEK,
   HOURS_PER_DAY,
@@ -12,14 +12,14 @@ import { hourLabel, WEEKDAY_NAMES } from "./scatterAxes";
 // A pointer that moves further than this between press and release was dragging, not clicking.
 const MAX_CLICK_PIXELS = 4;
 
-const STOPS = COLOR_STOPS.map((hex) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16)));
-
 /** A color from the points' gradient, from 0 for none to 1 for the busiest. */
-function gradientColor(share: number) {
-  const position = Math.min(1, Math.max(0, share)) * (STOPS.length - 1);
-  const index = Math.min(Math.floor(position), STOPS.length - 2);
+function gradientColor(stops: number[][], share: number) {
+  const position = Math.min(1, Math.max(0, share)) * (stops.length - 1);
+  const index = Math.min(Math.floor(position), stops.length - 2);
   const mix = position - index;
-  const [r, g, b] = STOPS[index]!.map((low, channel) => low + (STOPS[index + 1]![channel]! - low) * mix);
+  const [r, g, b] = stops[index]!.map(
+    (low, channel) => (low + (stops[index + 1]![channel]! - low) * mix) * 255,
+  );
   return `rgb(${r} ${g} ${b})`;
 }
 
@@ -33,6 +33,8 @@ export function isCellPicked({ cells, timeFrom, timeTo }: Area, cell: number) {
 interface WeekGridProps {
   counts: Uint32Array;
   area: Area;
+  /** The gradient's colors after black. */
+  gradient: readonly string[];
   onPick: (cell: number, isAdding: boolean) => void;
 }
 
@@ -40,7 +42,8 @@ interface WeekGridProps {
  * Requests in each hour of the week: days across, hours down, each cell colored by its
  * count. Clicking picks a cell, and shift-clicking adds or removes one.
  */
-export function WeekGrid({ counts, area, onPick }: WeekGridProps) {
+export function WeekGrid({ counts, area, gradient, onPick }: WeekGridProps) {
+  const stops = gradientStops(gradient).map(hexChannels);
   const busiest = Math.max(1, ...counts);
   const hasPick = area.cells !== null || area.timeFrom > 0 || area.timeTo < HOURS_PER_DAY * SECONDS_PER_HOUR;
 
@@ -75,7 +78,7 @@ export function WeekGrid({ counts, area, onPick }: WeekGridProps) {
         <div
           key={cell}
           className={isPicked ? "week-cell" : "week-cell unpicked"}
-          style={{ background: gradientColor(count / busiest) }}
+          style={{ background: gradientColor(stops, count / busiest) }}
           title={`${WEEKDAY_NAMES[day]} ${hourLabel(hour)}: ${count.toLocaleString("en-US")}`}
         />,
       );

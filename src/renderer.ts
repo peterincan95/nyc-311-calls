@@ -68,26 +68,34 @@ interface Targets {
   farB: Target;
 }
 
-// Point colors from no calls to the densest areas, evenly spaced. Add or remove
-// stops freely, but keep the first one black so empty areas match the background.
-export const COLOR_STOPS = ["#000000", "#893426", "#E67F0E", "#FABA58", "#FFF3DA"];
+// Point colors from the sparsest to the densest areas, evenly spaced after black, which
+// keeps empty areas matching the background. People can change these colors.
+export const DEFAULT_GRADIENT = ["#893426", "#e67f0e", "#faba58", "#fff3da"];
+const GRADIENT_START = "#000000";
+
+/** The whole gradient, from black through the given colors. */
+export const gradientStops = (colors: readonly string[]) => [GRADIENT_START, ...colors];
+
+/** A hex color as 0 to 1 channels. */
+export const hexChannels = (hex: string) =>
+  [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16) / 255);
 
 const MAX_PIXEL_RATIO = 2;
 const MAP_FILL = 0.94;
 export const SCATTER_FILL_X = 0.96;
 
-// Width of a point in CSS pixels, rounded to whole device pixels when drawn.
+// Width of a point in CSS pixels. Sizes between whole pixels are drawn by lighting the
+// edge pixels by how much of them the point covers, so points grow smoothly.
 const POINT_SIZE = 1.7;
 // The closest each panel zooms in. The map goes down to a few city blocks.
 export const MAP_MAX_ZOOM = 64;
 export const SCATTER_MAX_ZOOM = 18;
 // Points grow with zoom, reaching this multiple of their size at their panel's closest zoom.
 const MAX_ZOOM_GROWTH = 3.46;
-// Points on the zoomed-out map are this many device pixels smaller, reaching full size
-// by MAP_FULL_SIZE_ZOOM. Sizes round to whole device pixels, so a share of the size
-// would vanish on some screens.
+// Points on the zoomed-out map are this many device pixels smaller, so the whole city
+// stays crisp, easing to full size by MAP_FULL_SIZE_ZOOM.
 const MAP_HOME_SHRINK_PIXELS = 1;
-const MAP_FULL_SIZE_ZOOM = 2;
+const MAP_FULL_SIZE_ZOOM = 4;
 // Added to a point's brightness for each doubling of zoom. The scatterplot has no
 // empty streets or parks to set points off, so a lot of brightness washes it out.
 const MAP_ZOOM_BRIGHTNESS = 0.9;
@@ -100,8 +108,8 @@ const STREET_TIERS = [
   { brightness: 0.15, fade: [4, 6] },
 ];
 const SCATTER_ZOOM_BRIGHTNESS = 0;
-// Points this many device pixels wide or more are drawn round.
-const ROUND_POINT_SIZE = 4;
+// Points turn from squares to circles as they grow between these widths in device pixels.
+const ROUND_POINT_SIZES = [3, 5];
 
 // Brightness of one call. It falls once points would cover a plot more than this
 // many times over, so dense views keep their detail and look alike at any size.
@@ -122,9 +130,9 @@ const MAX_OPACITY_SCALE = 8;
 
 /** How much an opacity slider's setting scales brightness. */
 export const opacityScale = (opacity: number) => MAX_OPACITY_SCALE ** ((opacity - 50) / 50);
-// The map's default brightness, a step down from the scatterplot's: what 40% on its
+// The map's default brightness, a step down from the scatterplot's: what 30% on its
 // slider used to give.
-const MAP_DEFAULT_OPACITY_SCALE = MAX_OPACITY_SCALE ** -0.2;
+const MAP_DEFAULT_OPACITY_SCALE = MAX_OPACITY_SCALE ** -0.4;
 // Coloring by borough turns each borough's colors this far around the color wheel, by
 // borough id. Unknown boroughs keep the usual colors.
 const BOROUGH_HUE_DEGREES = [0, 28, 72, 144, 216, 288, 0, 0];
@@ -135,6 +143,8 @@ export interface PointStyle {
   mapOpacity: number;
   chartOpacity: number;
   colorByBorough: boolean;
+  /** The gradient's colors after black. */
+  gradient: readonly string[];
 }
 
 const POINT_VERTEX = `#version 300 es
@@ -162,7 +172,8 @@ flat out vec2 v_hue;
 flat out float v_fade;
 flat out float v_unselected;
 void main() {
-  gl_PointSize = u_pointSize;
+  // A pixel wider than the point, so pixels it only partly covers are drawn too.
+  gl_PointSize = ceil(u_pointSize) + 1.0;
   v_hue = u_boroughHues[(a_tags >> ${BOROUGH_SHIFT}u) & 7u];
   bool isWinter = a_time >= u_winterTime.x && a_time < u_winterTime.y;
   float local = a_time - (isWinter ? 3600.0 : 0.0);
@@ -192,17 +203,21 @@ const POINT_FRAGMENT = `#version 300 es
 precision highp float;
 uniform float u_weight;
 uniform float u_pointSize;
-uniform float u_roundSize;
+uniform vec2 u_roundSizes;
 flat in vec2 v_hue;
 flat in float v_fade;
 flat in float v_unselected;
 out vec4 color;
 void main() {
-  float coverage = 1.0;
-  if (u_pointSize >= u_roundSize) {
-    float distance = length(gl_PointCoord - 0.5) * 2.0;
-    coverage = 1.0 - smoothstep(1.0 - 2.0 / u_pointSize, 1.0, distance);
-  }
+  // This pixel's offset from the point's center, in pixels.
+  vec2 offset = abs(gl_PointCoord - 0.5) * (ceil(u_pointSize) + 1.0);
+  float half_size = u_pointSize * 0.5;
+  // How much of this pixel a square point covers, so its total light is its exact area.
+  vec2 overlap = clamp(min(vec2(half_size), offset + 0.5) - max(vec2(-half_size), offset - 0.5), 0.0, 1.0);
+  float square = overlap.x * overlap.y;
+  // A circle, scaled up to give off as much light as the square.
+  float circle = clamp(half_size + 0.5 - length(offset), 0.0, 1.0) * ${4 / Math.PI};
+  float coverage = mix(square, circle, smoothstep(u_roundSizes.x, u_roundSizes.y, u_pointSize));
   // Density in red, each point's borough hue as a direction in green and blue, and the
   // density of unselected calls in alpha.
   float weight = u_weight * coverage * v_fade;
@@ -260,11 +275,6 @@ void main() {
   color = sum;
 }`;
 
-function hexToVec3(hex: string) {
-  const channels = [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16) / 255);
-  return `vec3(${channels.map((channel) => channel.toFixed(4)).join(", ")})`;
-}
-
 const COMPOSITE_FRAGMENT = `#version 300 es
 precision highp float;
 in vec2 v_uv;
@@ -278,12 +288,12 @@ uniform float u_colorByBorough;
 uniform float u_outsideDesaturation;
 out vec4 color;
 ${TONE}
-const int STOP_COUNT = ${COLOR_STOPS.length};
-const vec3 STOPS[STOP_COUNT] = vec3[STOP_COUNT](${COLOR_STOPS.map(hexToVec3).join(", ")});
+const int STOP_COUNT = ${DEFAULT_GRADIENT.length + 1};
+uniform vec3 u_stops[STOP_COUNT];
 vec3 gradient(float value) {
   float position = clamp(value, 0.0, 1.0) * float(STOP_COUNT - 1);
   int stop = min(int(position), STOP_COUNT - 2);
-  return mix(STOPS[stop], STOPS[stop + 1], position - float(stop));
+  return mix(u_stops[stop], u_stops[stop + 1], position - float(stop));
 }
 float noise(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
 // The same turn around the color wheel as CSS hue-rotate().
@@ -421,6 +431,7 @@ export class CallRenderer {
   private mapOpacityScale = MAP_DEFAULT_OPACITY_SCALE;
   private scatterOpacityScale = 1;
   private colorByBorough = false;
+  private gradient = new Float32Array(gradientStops(DEFAULT_GRADIENT).flatMap(hexChannels));
   private streets: Streets | null = null;
   private streetLines: StreetLines | null = null;
   private showStreets = true;
@@ -474,10 +485,11 @@ export class CallRenderer {
     this.requestDraw();
   }
 
-  setPointStyle({ mapOpacity, chartOpacity, colorByBorough }: PointStyle) {
+  setPointStyle({ mapOpacity, chartOpacity, colorByBorough, gradient }: PointStyle) {
     this.mapOpacityScale = opacityScale(mapOpacity) * MAP_DEFAULT_OPACITY_SCALE;
     this.scatterOpacityScale = opacityScale(chartOpacity);
     this.colorByBorough = colorByBorough;
+    this.gradient = new Float32Array(gradientStops(gradient).flatMap(hexChannels));
     this.requestDraw();
   }
 
@@ -564,7 +576,7 @@ export class CallRenderer {
         "u_area",
         "u_cells",
         "u_startWeekday",
-        "u_roundSize",
+        "u_roundSizes",
         "u_boroughHues",
         "u_isOutside",
         "u_fadeOutsideArea",
@@ -582,6 +594,7 @@ export class CallRenderer {
         "u_nearGlow",
         "u_farGlow",
         "u_colorByBorough",
+        "u_stops",
         "u_outsideDesaturation",
         "u_streets",
       ]),
@@ -732,7 +745,7 @@ export class CallRenderer {
     }
     gl.uniform1uiv(points.uniforms.u_cells!, cellBits);
     gl.uniform1f(points.uniforms.u_startWeekday!, startWeekday(meta));
-    gl.uniform1f(points.uniforms.u_roundSize!, ROUND_POINT_SIZE);
+    gl.uniform2f(points.uniforms.u_roundSizes!, ROUND_POINT_SIZES[0]!, ROUND_POINT_SIZES[1]!);
     gl.uniform2fv(
       points.uniforms.u_boroughHues!,
       BOROUGH_HUE_DEGREES.flatMap((degrees) => {
@@ -818,7 +831,7 @@ export class CallRenderer {
   }
 
   private devicePointSize(growth: number, shrinkPixels = 0) {
-    return Math.max(1, Math.round(POINT_SIZE * growth * this.pixelRatio - shrinkPixels));
+    return Math.max(0.5, POINT_SIZE * growth * this.pixelRatio - shrinkPixels);
   }
 
   private setPanel(rect: Rect) {
@@ -913,6 +926,7 @@ export class CallRenderer {
     gl.uniform1f(composite.uniforms.u_nearGlow!, NEAR_GLOW);
     gl.uniform1f(composite.uniforms.u_farGlow!, FAR_GLOW);
     gl.uniform1f(composite.uniforms.u_colorByBorough!, this.colorByBorough ? 1 : 0);
+    gl.uniform3fv(composite.uniforms.u_stops!, this.gradient);
     gl.uniform1f(composite.uniforms.u_outsideDesaturation!, UNSELECTED_DESATURATION);
     pass(null);
     gl.activeTexture(gl.TEXTURE0);

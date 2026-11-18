@@ -715,6 +715,73 @@ body,
   transform: translateX(16px);
 }
 
+/* Gradient colors: a preview with a swatch under each stop that opens a color picker. */
+.gradient-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #444;
+}
+
+.gradient-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pill.gradient-reset {
+  width: 26px;
+  min-height: 24px;
+  border-color: transparent;
+}
+
+.gradient-preview {
+  height: 12px;
+  border-radius: 2px;
+}
+
+.gradient-stops {
+  position: relative;
+  height: 24px;
+}
+
+.gradient-stop {
+  position: absolute;
+  top: 0;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--text);
+  border-radius: 50%;
+  transform: translateX(-50%);
+  cursor: pointer;
+}
+
+/* A notch pointing up at the swatch's stop. */
+.gradient-stop::before {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  border: 4px solid transparent;
+  border-bottom-color: var(--text);
+  transform: translateX(-50%);
+  content: "";
+}
+
+.gradient-stop input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.gradient-stop:focus-within {
+  outline: 2px solid var(--tick);
+  outline-offset: 2px;
+}
+
 /* Each plot's opacity slider, always in view. */
 .opacity-control {
   display: flex;
