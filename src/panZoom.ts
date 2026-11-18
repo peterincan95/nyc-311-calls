@@ -30,6 +30,7 @@ export class PanZoom {
   private height = 1;
   private fill: readonly [number, number] = [1, 1];
   private isEnabled = true;
+  private isLocked = false;
   private pointers = new Map<number, Pointer>();
 
   /** `yDirection` is 1 if the data's y runs down the plot, and -1 if it runs up. */
@@ -65,6 +66,13 @@ export class PanZoom {
   /** Panning gives way to drawing a box. */
   setPanEnabled(isEnabled: boolean) {
     this.isEnabled = isEnabled;
+    this.pointers.clear();
+    this.plot.classList.remove("panning");
+  }
+
+  /** A locked camera ignores the wheel, dragging and pinching, as for the week grid. */
+  setLocked(isLocked: boolean) {
+    this.isLocked = isLocked;
     this.pointers.clear();
     this.plot.classList.remove("panning");
   }
@@ -119,6 +127,7 @@ export class PanZoom {
   }
 
   private onWheel = (event: WheelEvent) => {
+    if (this.isLocked) return;
     event.preventDefault();
     const pixels = event.deltaMode === WheelEvent.DOM_DELTA_LINE
       ? event.deltaY * LINE_HEIGHT_PIXELS
@@ -129,7 +138,7 @@ export class PanZoom {
   };
 
   private onPointerDown = (event: PointerEvent) => {
-    if (!this.isEnabled || event.button !== 0) return;
+    if (!this.isEnabled || this.isLocked || event.button !== 0) return;
     // A plot's axis labels sit outside it but can be part of its element.
     const { left, right, top, bottom } = this.plot.getBoundingClientRect();
     const { clientX: x, clientY: y } = event;

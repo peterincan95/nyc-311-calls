@@ -56,7 +56,7 @@ export function longitudeTicks({ lonMin, lonMax }: Meta["bounds"], width: number
   return ticks;
 }
 
-function hourLabel(hour: number) {
+export function hourLabel(hour: number) {
   const whole = Math.floor(hour) % 24;
   const minutes = hour % 1 === 0 ? "" : ":30";
   return `${whole % 12 || 12}${minutes}${whole < 12 ? "am" : "pm"}`;
@@ -70,6 +70,23 @@ export function hourTicks(width: number): Tick[] {
   const ticks: Tick[] = [];
   for (let hour = 0; hour <= 24; hour += step) {
     ticks.push({ share: hour / 24, label: hourLabel(hour) });
+  }
+  return ticks;
+}
+
+export const WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+// The week grid labels every this many hours.
+const HOUR_ROW_STEP = 3;
+
+/** The week grid's days, one label in the middle of each column. */
+export const weekdayTicks = (): Tick[] =>
+  WEEKDAY_NAMES.map((label, day) => ({ share: (day + 0.5) / 7, label }));
+
+/** The week grid's hours, in the middle of their rows. */
+export function hourRowTicks(): Tick[] {
+  const ticks: Tick[] = [];
+  for (let hour = 0; hour < 24; hour += HOUR_ROW_STEP) {
+    ticks.push({ share: (hour + 0.5) / 24, label: hourLabel(hour) });
   }
   return ticks;
 }

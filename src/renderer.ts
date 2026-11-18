@@ -1,5 +1,13 @@
 import { BOROUGH_SHIFT, BYTES_PER_CALL, type CallData, type Meta, type Streets } from "./data";
-import { GRID_MAX, SECONDS_PER_DAY, winterTime, type Selection, type Slice } from "./selection";
+import {
+  GRID_MAX,
+  SECONDS_PER_DAY,
+  WEEK_CELLS,
+  startWeekday,
+  winterTime,
+  type Selection,
+  type Slice,
+} from "./selection";
 
 /** The map's view: `x` and `y` are the share of the city at the panel's center. */
 export interface Camera {
@@ -9,7 +17,8 @@ export interface Camera {
 }
 
 /** What the scatterplot's x-axis shows. */
-export type ScatterAxis = "longitude" | "time";
+/** What the chart shows: points by longitude or time of day against date, or the week grid. */
+export type ScatterAxis = "longitude" | "time" | "week";
 
 export interface Rect {
   left: number;
@@ -110,6 +119,9 @@ const FAR_GLOW = 0.75;
 
 // Each opacity slider scales its plot's brightness by up to this factor either way from its middle.
 const MAX_OPACITY_SCALE = 8;
+
+/** How much an opacity slider's setting scales brightness. */
+export const opacityScale = (opacity: number) => MAX_OPACITY_SCALE ** ((opacity - 50) / 50);
 // The map's default brightness, a step down from the scatterplot's: what 40% on its
 // slider used to give.
 const MAP_DEFAULT_OPACITY_SCALE = MAX_OPACITY_SCALE ** -0.2;
@@ -140,6 +152,9 @@ uniform float u_pointSize;
 uniform uint u_tagMask;
 uniform uint u_tagMatch;
 uniform vec4 u_area;
+// One bit for each hour of the week, from Monday midnight.
+uniform uint u_cells[${Math.ceil(WEEK_CELLS / 32)}];
+uniform float u_startWeekday;
 uniform vec2 u_boroughHues[8];
 uniform float u_isOutside;
 uniform float u_fadeOutsideArea;
@@ -150,11 +165,16 @@ void main() {
   gl_PointSize = u_pointSize;
   v_hue = u_boroughHues[(a_tags >> ${BOROUGH_SHIFT}u) & 7u];
   bool isWinter = a_time >= u_winterTime.x && a_time < u_winterTime.y;
-  float second = mod(a_time - (isWinter ? 3600.0 : 0.0), ${SECONDS_PER_DAY}.0);
+  float local = a_time - (isWinter ? 3600.0 : 0.0);
+  float second = mod(local, ${SECONDS_PER_DAY}.0);
+  int weekday = int(mod(floor(local / ${SECONDS_PER_DAY}.0) + u_startWeekday, 7.0));
+  int cell = weekday * 24 + min(int(second / 3600.0), 23);
+  bool outsideCells = ((u_cells[cell >> 5] >> uint(cell & 31)) & 1u) == 0u;
   bool outsideArea = any(lessThan(a_position, u_area.xy)) || any(greaterThan(a_position, u_area.zw))
     || second < u_timeRange.x || second > u_timeRange.y;
-  // The map fades calls outside the box instead of hiding them.
-  if ((a_tags & u_tagMask) != u_tagMatch || (outsideArea && u_fadeOutsideArea < 0.5)) {
+  // The map fades calls outside the box instead of hiding them, but hides hours left
+  // out on the week grid, like dates left out on the timeline.
+  if ((a_tags & u_tagMask) != u_tagMatch || outsideCells || (outsideArea && u_fadeOutsideArea < 0.5)) {
     // Outside the clip volume, so the point is never drawn.
     gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
     return;
@@ -455,9 +475,8 @@ export class CallRenderer {
   }
 
   setPointStyle({ mapOpacity, chartOpacity, colorByBorough }: PointStyle) {
-    const toScale = (opacity: number) => MAX_OPACITY_SCALE ** ((opacity - 50) / 50);
-    this.mapOpacityScale = toScale(mapOpacity) * MAP_DEFAULT_OPACITY_SCALE;
-    this.scatterOpacityScale = toScale(chartOpacity);
+    this.mapOpacityScale = opacityScale(mapOpacity) * MAP_DEFAULT_OPACITY_SCALE;
+    this.scatterOpacityScale = opacityScale(chartOpacity);
     this.colorByBorough = colorByBorough;
     this.requestDraw();
   }
@@ -543,6 +562,8 @@ export class CallRenderer {
         "u_tagMask",
         "u_tagMatch",
         "u_area",
+        "u_cells",
+        "u_startWeekday",
         "u_roundSize",
         "u_boroughHues",
         "u_isOutside",
@@ -702,6 +723,15 @@ export class CallRenderer {
       timeFrom - TIME_MARGIN_SECONDS,
       timeTo + TIME_MARGIN_SECONDS,
     );
+    const cellBits = new Uint32Array(Math.ceil(WEEK_CELLS / 32)).fill(0xffffffff);
+    if (selection.area.cells) {
+      cellBits.fill(0);
+      selection.area.cells.forEach((isIn, cell) => {
+        if (isIn) cellBits[cell >> 5]! |= 1 << (cell & 31);
+      });
+    }
+    gl.uniform1uiv(points.uniforms.u_cells!, cellBits);
+    gl.uniform1f(points.uniforms.u_startWeekday!, startWeekday(meta));
     gl.uniform1f(points.uniforms.u_roundSize!, ROUND_POINT_SIZE);
     gl.uniform2fv(
       points.uniforms.u_boroughHues!,
@@ -735,7 +765,11 @@ export class CallRenderer {
       this.drawStreets(resources, targets, map, zoom, [scaleX, scaleY, -scaleX * x, -scaleY * y]);
     }
 
-    if (drawScatter) {
+    if (drawScatter && this.scatterAxis === "week") {
+      // The week grid is drawn on the page, so the chart's panel is left empty.
+      this.setPanel(scatter);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+    } else if (drawScatter) {
       const { zoom, x, y } = this.scatterCamera;
       const weight = this.startPanel(
         selection,

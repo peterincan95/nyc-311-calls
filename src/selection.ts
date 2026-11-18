@@ -20,7 +20,11 @@ export interface Slice {
 export const GRID_MAX = 65535;
 
 export const SECONDS_PER_DAY = 86400;
-const SECONDS_PER_HOUR = 3600;
+export const SECONDS_PER_HOUR = 3600;
+export const HOURS_PER_DAY = 24;
+export const DAYS_PER_WEEK = 7;
+/** Each hour of the week, Monday midnight first, so the weekend comes last. */
+export const WEEK_CELLS = DAYS_PER_WEEK * HOURS_PER_DAY;
 // New York's clocks change at 2am.
 const CLOCK_CHANGE_SECONDS = 2 * SECONDS_PER_HOUR;
 
@@ -33,6 +37,8 @@ export interface Area {
   /** Seconds after midnight. */
   timeFrom: number;
   timeTo: number;
+  /** The hours of the week picked on the week grid, 1 for each one in, or null for all. */
+  cells: Uint8Array | null;
 }
 
 export const WHOLE_CITY: Area = {
@@ -42,7 +48,17 @@ export const WHOLE_CITY: Area = {
   north: GRID_MAX,
   timeFrom: 0,
   timeTo: SECONDS_PER_DAY,
+  cells: null,
 };
+
+export const isWholeCity = (area: Area) =>
+  area.west === 0 &&
+  area.east === GRID_MAX &&
+  area.south === 0 &&
+  area.north === GRID_MAX &&
+  area.timeFrom === 0 &&
+  area.timeTo === SECONDS_PER_DAY &&
+  area.cells === null;
 
 /** When winter time starts and ends: the two days that aren't 24 hours long. */
 export function winterTime({ days }: Meta): [start: number, end: number] {
@@ -53,23 +69,43 @@ export function winterTime({ days }: Meta): [start: number, end: number] {
   return [changes[0]!, changes[1]!];
 }
 
-/** Seconds after midnight in New York. `tStart` is a midnight in summer time. */
-function secondOfDay(t: number, [winterStart, winterEnd]: [number, number]) {
-  const isWinter = t >= winterStart && t < winterEnd;
-  return (t - (isWinter ? SECONDS_PER_HOUR : 0)) % SECONDS_PER_DAY;
+/** The day of the week `tStart` falls on, from 0 for Monday. */
+export const startWeekday = ({ tStart }: Meta) =>
+  // January 1, 1970 was a Thursday, and New York's midnights fall early in the UTC day.
+  (Math.floor(tStart / SECONDS_PER_DAY) + 3) % DAYS_PER_WEEK;
+
+/** What's needed to turn a call's time into New York's clock time. */
+interface Clock {
+  winter: [number, number];
+  weekday: number;
+}
+
+const clockOf = (meta: Meta): Clock => ({ winter: winterTime(meta), weekday: startWeekday(meta) });
+
+/** Seconds since `tStart` on New York's clock. `tStart` is a midnight in summer time. */
+function localTime(t: number, [winterStart, winterEnd]: [number, number]) {
+  return t >= winterStart && t < winterEnd ? t - SECONDS_PER_HOUR : t;
+}
+
+/** The hour of the week a call falls in, as an index into `Area.cells`. */
+function weekCell(local: number, weekday: number) {
+  const day = (Math.floor(local / SECONDS_PER_DAY) + weekday) % DAYS_PER_WEEK;
+  return day * HOURS_PER_DAY + Math.floor((local % SECONDS_PER_DAY) / SECONDS_PER_HOUR);
 }
 
 function isInArea(
-  { west, east, south, north, timeFrom, timeTo }: Area,
+  { west, east, south, north, timeFrom, timeTo, cells }: Area,
   position: number,
   t: number,
-  winter: [number, number],
+  { winter, weekday }: Clock,
 ) {
   const x = position & 0xffff;
   const y = position >>> 16;
   if (x < west || x > east || y < south || y > north) return false;
-  const second = secondOfDay(t, winter);
-  return second >= timeFrom && second <= timeTo;
+  const local = localTime(t, winter);
+  const second = local % SECONDS_PER_DAY;
+  if (second < timeFrom || second > timeTo) return false;
+  return cells === null || cells[weekCell(local, weekday)] === 1;
 }
 
 export interface Selection extends TagFilter {
@@ -115,7 +151,7 @@ export function countSubjectsByDay(
   area: Area,
 ): Uint32Array[] {
   const { days } = meta;
-  const winter = winterTime(meta);
+  const clock = clockOf(meta);
 
   return subjects.map(({ start, count }) => {
     const counts = new Uint32Array(days.length - 1);
@@ -128,7 +164,7 @@ export function countSubjectsByDay(
         nextDay = days[day + 1]!;
       }
       if ((tags[call]! & mask) !== match) continue;
-      if (isInArea(area, words[call * 2]!, t, winter)) counts[day]! += 1;
+      if (isInArea(area, words[call * 2]!, t, clock)) counts[day]! += 1;
     }
     return counts;
   });
@@ -165,9 +201,9 @@ function forEachCall(
   area: Area,
   tFrom: number,
   tTo: number,
-  visit: (tag: number) => void,
+  visit: (tag: number, t: number) => void,
 ) {
-  const winter = winterTime(meta);
+  const clock = clockOf(meta);
   for (const subject of subjects) {
     const end = subject.start + subject.count;
     const first = firstAtOrAfter(words, subject.start, end, tFrom);
@@ -175,9 +211,31 @@ function forEachCall(
     for (let call = first; call < last; call += 1) {
       const tag = tags[call]!;
       if ((tag & mask) !== match) continue;
-      if (isInArea(area, words[call * 2]!, words[call * 2 + 1]!, winter)) visit(tag);
+      const t = words[call * 2 + 1]!;
+      if (isInArea(area, words[call * 2]!, t, clock)) visit(tag, t);
     }
   }
+}
+
+/**
+ * Matching calls in each hour of the week, for the week grid. The grid shows what can be
+ * picked, so it ignores the parts of `area` that pick times of day or week.
+ */
+export function countWeekCells(
+  data: CallData,
+  subjects: Subject[],
+  tags: TagFilter,
+  area: Area,
+  tFrom: number,
+  tTo: number,
+): Uint32Array {
+  const { winter, weekday } = clockOf(data.meta);
+  const counts = new Uint32Array(WEEK_CELLS);
+  const place = { ...area, timeFrom: 0, timeTo: SECONDS_PER_DAY, cells: null };
+  forEachCall(data, subjects, tags, place, tFrom, tTo, (_, t) => {
+    counts[weekCell(localTime(t, winter), weekday)]! += 1;
+  });
+  return counts;
 }
 
 /** How many calls each complaint menu item would show, keeping the other filters. */

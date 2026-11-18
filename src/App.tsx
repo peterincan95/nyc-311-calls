@@ -12,27 +12,46 @@ import {
 } from "./filters";
 import { MapView } from "./mapView";
 import { HOME, isHome, PanZoom } from "./panZoom";
-import { CallRenderer, SCATTER_FILL_X, SCATTER_MAX_ZOOM, type Rect, type ScatterAxis } from "./renderer";
-import { dateTicks, hourTicks, longitudeTicks } from "./scatterAxes";
+import {
+  CallRenderer,
+  SCATTER_FILL_X,
+  SCATTER_MAX_ZOOM,
+  type Rect,
+  type ScatterAxis,
+} from "./renderer";
+import { dateTicks, hourRowTicks, hourTicks, longitudeTicks, weekdayTicks } from "./scatterAxes";
 import {
   countCallsByDay,
   countInRange,
   countSubjectsByDay,
   countComplaints,
   countPlaces,
+  countWeekCells,
+  DAYS_PER_WEEK,
   GRID_MAX,
+  HOURS_PER_DAY,
+  isWholeCity,
   SECONDS_PER_DAY,
   selectCalls,
   sumByDay,
+  WEEK_CELLS,
   WHOLE_CITY,
   type Area,
 } from "./selection";
+import { emptyCells, WeekGrid } from "./WeekGrid";
 import { SummaryPanel, type SummaryRow } from "./SummaryPanel";
 import { Timeline, type DayRange } from "./Timeline";
 import { DEFAULT_VISUALS, VisualOptions, type Visuals } from "./VisualOptions";
 import { OpacitySlider } from "./OpacitySlider";
 
 const ANNOUNCE_DELAY_MS = 600;
+
+// What the chart's view menu offers, in order.
+const SCATTER_VIEWS: { axis: ScatterAxis; label: string; name: string }[] = [
+  { axis: "longitude", label: "Longitude, west to east", name: "longitude and date" },
+  { axis: "time", label: "Time of day", name: "time of day and date" },
+  { axis: "week", label: "Day of week and hour", name: "day of week and hour" },
+];
 const SCATTER_FILL = [SCATTER_FILL_X, 1] as const;
 
 const dateFormat = new Intl.DateTimeFormat("en-US", {
@@ -132,7 +151,8 @@ function Explorer({ data }: { data: CallData }) {
   // Choosing in the header afterwards replaces the summary's choice.
   const isSummaryChoice = summaryChoice !== null && summaryChoice.chosen === filter;
   const isTimeAxis = scatterAxis === "time";
-  const axisName = isTimeAxis ? "time of day" : "longitude";
+  const isWeekView = scatterAxis === "week";
+  const viewName = SCATTER_VIEWS.find(({ axis }) => axis === scatterAxis)!.name;
 
   const tags = useMemo(() => combineTags(filter, place), [filter, place]);
   // Each complaint's calls by day, so the summary can total any date range quickly.
@@ -181,6 +201,12 @@ function Explorer({ data }: { data: CallData }) {
   const placeCounts = useMemo(
     () => lazyCounts(() => countPlaces(data, filter, area, tFrom, tTo)),
     [data, filter, area, tFrom, tTo],
+  );
+
+  // Only the week grid needs these, and they take a pass over the calls.
+  const weekCounts = useMemo(
+    () => (isWeekView ? countWeekCells(data, filter.subjects, tags, area, tFrom, tTo) : null),
+    [isWeekView, data, filter, tags, area, tFrom, tTo],
   );
 
   const formatDay = (t: number) => dateFormat.format((meta.tStart + t) * 1000);
@@ -280,6 +306,11 @@ function Explorer({ data }: { data: CallData }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isDrawingBox]);
 
+  // The week grid always fits, so it doesn't pan or zoom.
+  useEffect(() => {
+    scatterView.current?.setLocked(isWeekView);
+  }, [isWeekView]);
+
   // Screen readers hear the result once the range settles, not every day of a drag.
   useEffect(() => {
     const timer = setTimeout(() => setAnnouncement(description), ANNOUNCE_DELAY_MS);
@@ -291,15 +322,56 @@ function Explorer({ data }: { data: CallData }) {
     setIsDrawingBox(false);
   };
 
-  const drawOnScatter = ({ left, right, top, bottom }: Box) => {
+  /** Picks hours of the week, replacing any time-of-day box. Picking all of them, or none, clears the pick. */
+  const pickCells = (cells: Uint8Array) => {
+    const count = cells.reduce((sum, isIn) => sum + isIn, 0);
+    const next = {
+      ...area,
+      timeFrom: 0,
+      timeTo: SECONDS_PER_DAY,
+      cells: count === 0 || count === WEEK_CELLS ? null : cells,
+    };
+    setArea(isWholeCity(next) ? WHOLE_CITY : next);
+  };
+
+  /** A click picks just that cell, or clears it if it's the only one. Shift adds or removes it. */
+  const pickCell = (cell: number, isAdding: boolean) => {
+    const current = area.cells;
+    if (isAdding) {
+      const cells = current ? current.slice() : emptyCells();
+      cells[cell] = cells[cell] ? 0 : 1;
+      pickCells(cells);
+      return;
+    }
+    const isOnlyPick = current?.[cell] === 1 && current.reduce((sum, isIn) => sum + isIn, 0) === 1;
+    const cells = emptyCells();
+    if (!isOnlyPick) cells[cell] = 1;
+    pickCells(cells);
+  };
+
+  const drawOnScatter = ({ left, right, top, bottom }: Box, isAdding: boolean) => {
+    if (isWeekView) {
+      // Every cell the box touches.
+      const cells = isAdding && area.cells ? area.cells.slice() : emptyCells();
+      const [dayFrom, dayTo] = [left, right].map((share) => Math.min(Math.floor(share * DAYS_PER_WEEK), DAYS_PER_WEEK - 1));
+      const [hourFrom, hourTo] = [top, bottom].map((share) => Math.min(Math.floor(share * HOURS_PER_DAY), HOURS_PER_DAY - 1));
+      for (let day = dayFrom!; day <= dayTo!; day += 1) {
+        for (let hour = hourFrom!; hour <= hourTo!; hour += 1) cells[day * HOURS_PER_DAY + hour] = 1;
+      }
+      pickCells(cells);
+      setIsDrawingBox(false);
+      return;
+    }
     const view = scatterView.current!;
     const from = clampShare(view.dataX(left));
     const to = clampShare(view.dataX(right));
     if (isTimeAxis) {
+      // A time-of-day box replaces any hours picked on the week grid.
       setArea({
         ...area,
         timeFrom: Math.round(from * SECONDS_PER_DAY),
         timeTo: Math.round(to * SECONDS_PER_DAY),
+        cells: null,
       });
     } else {
       setArea({ ...area, west: Math.round(from * GRID_MAX), east: Math.round(to * GRID_MAX) });
@@ -344,8 +416,15 @@ function Explorer({ data }: { data: CallData }) {
   const percent = (share: number) => `${share * 100}%`;
 
   const dataWidth = scatterSize.width * SCATTER_FILL_X * zoom;
-  const xTicks = isTimeAxis ? hourTicks(dataWidth) : longitudeTicks(meta.bounds, dataWidth);
-  const yTicks = dateTicks(meta, scatterSize.height * zoom);
+  const xTicks = isWeekView
+    ? weekdayTicks()
+    : isTimeAxis
+      ? hourTicks(dataWidth)
+      : longitudeTicks(meta.bounds, dataWidth);
+  const yTicks = isWeekView ? hourRowTicks() : dateTicks(meta, scatterSize.height * zoom);
+  // The week grid fills the plot without a camera.
+  const toTickX = isWeekView ? (share: number) => share : toPlotX;
+  const toTickY = isWeekView ? (share: number) => share : toPlotY;
 
   const resetRange = () => {
     setRange(fullRange);
@@ -456,32 +535,42 @@ function Explorer({ data }: { data: CallData }) {
           </div>
         </section>
 
-        <section className="panel scatter" aria-label={`Requests by ${axisName} and date`}>
+        <section className="panel scatter" aria-label={`Requests by ${viewName}`}>
           <div
-            className={isDrawingBox ? "plot drawing-box" : "plot"}
+            className={["plot", isDrawingBox && "drawing-box", isWeekView && "week-plot"]
+              .filter(Boolean)
+              .join(" ")}
             ref={scatterPlot}
             role="img"
-            aria-label={`Scatterplot of ${axisName} against date for the full year, highlighting ${dates}.${peakText}`}
+            aria-label={
+              isWeekView
+                ? `Grid of requests by day of week and hour, ${dates}.`
+                : `Scatterplot of ${viewName} for the full year, highlighting ${dates}.${peakText}`
+            }
             {...(isDrawingBox ? scatterDraw.handlers : {})}
           >
             {yTicks
-              .filter(({ share }) => isOnPlot(toPlotY(share)))
+              .filter(({ share }) => isOnPlot(toTickY(share)))
               .map(({ share, label }) => (
-                <span className="month" key={share} style={{ top: percent(toPlotY(share)) }}>
+                <span className="month" key={share} style={{ top: percent(toTickY(share)) }}>
                   {label}
                 </span>
               ))}
+            {isWeekView && weekCounts && (
+              <WeekGrid counts={weekCounts} area={area} onPick={pickCell} />
+            )}
             <div className="plot-clip">
-              {isFiltered &&
+              {!isWeekView &&
+                isFiltered &&
                 [tFrom, tTo].map((t, index) => (
                   <div className="edge" key={index} style={{ top: percent(toPlotY(t / span)) }} />
                 ))}
-              {hasBox && <BoxOutline box={scatterBox} />}
+              {hasBox && !isWeekView && <BoxOutline box={scatterBox} />}
               {scatterDraw.draft && <BoxOutline box={scatterDraw.draft} draft />}
             </div>
           </div>
           <div className="scatter-tools">
-            {!isHome(scatterCamera) && (
+            {!isWeekView && !isHome(scatterCamera) && (
               <button
                 className="pill"
                 type="button"
@@ -490,41 +579,35 @@ function Explorer({ data }: { data: CallData }) {
                 Reset view
               </button>
             )}
-            <OpacitySlider
-              plotName="Chart"
-              value={visuals.chartOpacity}
-              onChange={(chartOpacity) => setVisuals({ ...visuals, chartOpacity })}
-            />
+            {!isWeekView && (
+              <OpacitySlider
+                plotName="Chart"
+                value={visuals.chartOpacity}
+                onChange={(chartOpacity) => setVisuals({ ...visuals, chartOpacity })}
+              />
+            )}
           </div>
           <div className="x-axis">
             {xTicks
-              .filter(({ share }) => isOnPlot(toPlotX(share)))
+              .filter(({ share }) => isOnPlot(toTickX(share)))
               .map(({ share, label }) => (
-                <span key={share} style={{ left: percent(toPlotX(share)) }}>
+                <span key={share} style={{ left: percent(toTickX(share)) }}>
                   {label}
                 </span>
               ))}
             <div className="x-axis-title">
-              <p>{isTimeAxis ? "Time of day" : "Longitude, west to east"}</p>
-              <button
-                className="pill pill-icon axis-toggle"
-                type="button"
-                aria-label={isTimeAxis ? "Show longitude" : "Show time of day"}
-                title={isTimeAxis ? "Show longitude" : "Show time of day"}
-                onClick={() => setScatterAxis(isTimeAxis ? "longitude" : "time")}
+              <select
+                className="view-select"
+                aria-label="Chart view"
+                value={scatterAxis}
+                onChange={(event) => setScatterAxis(event.target.value as ScatterAxis)}
               >
-                {isTimeAxis ? (
-                  <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="M2 4l4-1.5L10 4l4-1.5V12l-4 1.5L6 12l-4 1.5z" />
-                    <path d="M6 2.5V12M10 4v9.5" />
-                  </svg>
-                ) : (
-                  <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <circle cx="8" cy="8" r="6" />
-                    <path d="M8 4.5V8l2.5 1.5" />
-                  </svg>
-                )}
-              </button>
+                {SCATTER_VIEWS.map(({ axis, label }) => (
+                  <option key={axis} value={axis}>
+                    {label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </section>
