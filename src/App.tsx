@@ -39,6 +39,7 @@ import {
   type Area,
 } from "./selection";
 import { emptyCells, WeekGrid } from "./WeekGrid";
+import { InfoPanel } from "./InfoPanel";
 import { SummaryPanel, type SummaryRow } from "./SummaryPanel";
 import { Timeline, type DayRange } from "./Timeline";
 import { DEFAULT_VISUALS, VisualOptions, type Visuals } from "./VisualOptions";
@@ -471,6 +472,7 @@ function Explorer({ data }: { data: CallData }) {
           <p>
             <strong>{callCount}</strong> requests
           </p>
+          <InfoPanel />
         </div>
       </header>
 
